@@ -1,0 +1,70 @@
+name: Verify and deploy TGS Tracker
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'live: 실제 업무 / demo: 가상 데이터 읽기 전용'
+        type: choice
+        options: [demo, live]
+        default: demo
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: Select deployment mode
+        shell: bash
+        env:
+          INPUT_MODE: ${{ inputs.mode }}
+          CONFIGURED_MODE: ${{ vars.APP_MODE }}
+        run: |
+          mode="${INPUT_MODE:-${CONFIGURED_MODE:-demo}}"
+          if [[ "$mode" != "live" && "$mode" != "demo" ]]; then exit 1; fi
+          echo "VITE_APP_MODE=$mode" >> "$GITHUB_ENV"
+      - name: Build static site
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ "$VITE_APP_MODE" = "live" ] && { [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; }; then
+            echo "Live deployment requires Supabase connection variables."
+            exit 1
+          fi
+          npm run build
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: dist
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

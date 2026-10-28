@@ -1,0 +1,5 @@
+project_id = "tgs-tracker"
+
+[functions.invite-user]
+# publishable key 환경에서도 함수 내부 getUser(token)와 DB 관리자 검사를 수행한다.
+verify_jwt = false
