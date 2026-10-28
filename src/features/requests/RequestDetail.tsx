@@ -167,12 +167,12 @@ export function RequestDetail() {
     people.find((p) => p.id === uid)?.display_name || "사용자";
   return (
     <>
-      <Link className="back-link" to="/board">
-        ← 진행 현황
+      <Link className="back-link" to={location.state?.returnTo || "/board"}>
+        목록으로 돌아가기
       </Link>
       <div className="detail-heading">
         <div>
-          <div className="eyebrow">
+          <div className="request-context">
             {customer?.name} / REQUEST #{row.number}
           </div>
           <h1>{row.title}</h1>
@@ -404,7 +404,7 @@ export function RequestDetail() {
         </div>
         <aside>
           <section className="detail-summary">
-            <span className="eyebrow">DEPLOYMENT CHECK</span>
+            <span className="request-context">운영 반영 확인</span>
             <h2>{deploymentLabel(row)}</h2>
             <dl>
               <div>

@@ -33,7 +33,7 @@ const row = {
 };
 
 // 외부 HTTP 경계만 대체한다. 실제 React 화면·Supabase SDK·앱 API를 실행한다.
-async function mockLive(page: Page) {
+async function mockLive(page: Page, admin = false) {
   const token =
     "eyJhbGciOiJIUzI1NiJ9." +
     Buffer.from(
@@ -101,7 +101,7 @@ async function mockLive(page: Page) {
         ...user,
         display_name: "테스트 담당자",
         is_active: true,
-        role: "member",
+        role: admin ? "admin" : "member",
       };
     else if (url.pathname.endsWith("/customers"))
       result = [
@@ -288,4 +288,51 @@ test("읽기 전용 데모의 보드·필터·상세·모바일", async ({ page 
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("모바일 메뉴와 필터 초기화, 상세에서 목록 복귀", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(
+    "http://127.0.0.1:5174/#/requests?customer=hanbit&deployment=pending",
+  );
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await page
+    .getByRole("link", {
+      name: "거래명세서 출력 시 합계 금액 수정",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("link", { name: "목록으로 돌아가기" }).click();
+  await expect(page).toHaveURL(/requests\?customer=hanbit&deployment=pending/);
+  await page.getByRole("button", { name: "필터 초기화" }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(10);
+  await expect(
+    page.getByRole("link", {
+      name: "매출 조회 화면의 검색 조건 유지",
+      exact: true,
+    }),
+  ).toBeInViewport();
+  await page.getByText("메뉴", { exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "모바일 메뉴" })
+    .getByRole("link", { name: "진행 현황", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "진행 현황", exact: true }),
+  ).toBeVisible();
+});
+
+test("모바일에서도 관리자 고객사 표의 헤더와 편집 동작을 유지한다", async ({
+  page,
+}) => {
+  await mockLive(page, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:5175/#/admin/customers");
+  await expect(
+    page.getByRole("columnheader", { name: "고객사", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "수정", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "고객사 수정" }),
+  ).toBeVisible();
 });

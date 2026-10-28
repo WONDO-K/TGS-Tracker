@@ -36,7 +36,6 @@ export function Empty({
   );
 }
 export function PageTitle({
-  eyebrow,
   title,
   description,
   action,
@@ -49,7 +48,6 @@ export function PageTitle({
   return (
     <div className="page-heading">
       <div>
-        <div className="eyebrow">{eyebrow}</div>
         <h1>{title}</h1>
         <p>{description}</p>
       </div>

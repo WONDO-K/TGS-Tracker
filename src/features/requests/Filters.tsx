@@ -22,6 +22,7 @@ export function useFilters() {
     setParams(
       (old) => {
         const next = new URLSearchParams(old);
+        if (name === "reset") return new URLSearchParams();
         if (value) next.set(name, value);
         else next.delete(name);
         return next;
@@ -52,7 +53,6 @@ export function RequestFilters({
     <div className="filters">
       <div className="filter-main">
         <label className="search-field">
-          <span aria-hidden="true">⌕</span>
           <input
             aria-label="제목·내용 검색"
             placeholder="제목 또는 요청 내용 검색"
@@ -158,6 +158,15 @@ export function RequestFilters({
           )}
         </div>
       </details>
+      {Object.values(filters).some(Boolean) && (
+        <button
+          type="button"
+          className="filter-reset"
+          onClick={() => change("reset", "")}
+        >
+          필터 초기화
+        </button>
+      )}
     </div>
   );
 }

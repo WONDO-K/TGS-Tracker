@@ -116,98 +116,78 @@ function AdminGuard({ children }: { children: ReactNode }) {
 }
 function Layout() {
   const { profile, customers } = useSession();
+  const links = (
+    <>
+      <NavLink to="/board">진행 현황</NavLink>
+      <NavLink to="/requests">요청 목록</NavLink>
+      {!demo && profile?.role === "admin" && (
+        <>
+          <NavLink to="/admin/customers">고객사 관리</NavLink>
+          <NavLink to="/admin/users">사용자 관리</NavLink>
+        </>
+      )}
+    </>
+  );
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <Link to="/board" className="brand">
-          <span className="brand-mark">T</span>
-          <span>
-            TGS <strong>Tracker</strong>
-          </span>
-        </Link>
-        <div className="workspace-label">TEAM WORKSPACE</div>
-        <nav aria-label="주 메뉴">
-          <NavLink to="/board">
-            <span>▦</span>진행 현황
-          </NavLink>
-          <NavLink to="/requests">
-            <span>☷</span>요청 목록
-          </NavLink>
-          {!demo && profile?.role === "admin" && (
-            <>
-              <div className="workspace-label admin-label">ADMINISTRATION</div>
-              <NavLink to="/admin/customers">
-                <span>▤</span>고객사 관리
-              </NavLink>
-              <NavLink to="/admin/users">
-                <span>♙</span>사용자 관리
-              </NavLink>
-            </>
-          )}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <i className="dot green" />
-            요청부터 운영 반영까지
-            <p>
-              작은 기록이 만드는
-              <br />
-              명확한 업무 흐름.
-            </p>
-          </div>
-          <div className="sidebar-user">
-            <span className="avatar">{profile?.display_name.slice(0, 1)}</span>
-            <div>
-              <strong>{profile?.display_name}</strong>
-              <small>
-                {demo
-                  ? "DEMO WORKSPACE"
-                  : profile?.role === "admin"
-                    ? "관리자"
-                    : "팀 멤버"}
-              </small>
-            </div>
-            {!demo && (
-              <Link to="/account" aria-label="내 계정 설정">
-                ⚙
-              </Link>
+      <header className="app-header">
+        <div className="header-inner">
+          <Link to="/board" className="brand">
+            <svg viewBox="0 0 30 24" width="30" height="24" aria-hidden="true">
+              <path
+                d="M2 4h9v8h9M2 12h5v8h20M20 8l4 4-4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>
+              TGS <strong>Tracker</strong>
+            </span>
+          </Link>
+          <nav className="desktop-nav" aria-label="주 메뉴">
+            {links}
+          </nav>
+          <div className="header-account">
+            {demo ? (
+              <span className="demo-label">체험용 데이터</span>
+            ) : (
+              <>
+                <Link to="/account">{profile?.display_name}</Link>
+                <button
+                  className="quiet"
+                  onClick={() => void client().auth.signOut()}
+                >
+                  로그아웃
+                </button>
+              </>
             )}
           </div>
-          {!demo && (
-            <button
-              className="logout"
-              onClick={() => void client().auth.signOut()}
+          <details className="mobile-menu">
+            <summary>메뉴</summary>
+            <nav
+              aria-label="모바일 메뉴"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest("a"))
+                  e.currentTarget.closest("details")!.open = false;
+              }}
             >
-              로그아웃
-            </button>
-          )}
+              {links}
+              {!demo && (
+                <>
+                  <Link to="/account">내 계정</Link>
+                  <button onClick={() => void client().auth.signOut()}>
+                    로그아웃
+                  </button>
+                </>
+              )}
+            </nav>
+          </details>
         </div>
-      </aside>
+      </header>
       <div className="main-area">
-        <header className="topbar">
-          <span>
-            WORKSPACE <b>/</b> 고객사 요청 관리
-          </span>
-          <div>
-            <span className="connection">
-              <i className="dot green" />
-              {demo ? "읽기 전용 데모" : "팀 워크스페이스"}
-            </span>
-            <span className="top-avatar">
-              {profile?.display_name.slice(0, 1)}
-            </span>
-          </div>
-        </header>
         <main className="page-content">
-          {demo && (
-            <div className="demo-banner">
-              DEMO{" "}
-              <span>
-                가상 고객사와 요청으로 구성한 포트폴리오입니다. 모든 데이터는
-                읽기 전용입니다.
-              </span>
-            </div>
-          )}
           {!demo && !customers.length && profile?.role !== "admin" && (
             <Alert tone="info">
               담당 고객사 배정이 필요합니다. 관리자에게 문의해주세요.
@@ -216,8 +196,8 @@ function Layout() {
           <Outlet />
         </main>
         <footer className="site-footer">
-          <span>TGS Tracker</span>
-          <span>REQUEST · ACTION · RELEASE</span>
+          <span>TGS Tracker · 고객사 요청·조치·배포 관리</span>
+          <span>{demo ? "가상 데이터 / 읽기 전용" : "TGS 내부 업무"}</span>
         </footer>
       </div>
     </div>

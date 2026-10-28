@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   DndContext,
   PointerSensor,
@@ -24,6 +24,7 @@ import { Alert, Empty, Loading, PageTitle } from "../../components/UI";
 import { RequestFilters, useFilters } from "./Filters";
 const statusKeys = Object.keys(statuses) as Status[];
 export function Board({ list = false }: { list?: boolean }) {
+  const location = useLocation();
   const { customers } = useSession(),
     { filters, change } = useFilters();
   const [results, setResults] = useState<Partial<Record<Status, ListResult>>>(
@@ -112,34 +113,19 @@ export function Board({ list = false }: { list?: boolean }) {
       <PageTitle
         eyebrow="REQUEST WORKSPACE"
         title={list ? "요청 목록" : "진행 현황"}
-        description="고객사의 요청부터 운영 반영까지, 한눈에 확인하세요."
+        description="테스트 반영 후, 운영에 빠진 요청을 확인합니다."
         action={
           !demo && (
             <Link className="button primary" to="/requests/new">
-              ＋ 요청 등록
+              요청 등록
             </Link>
           )
         }
       />
-      <div className="metrics">
-        <div className="metric">
-          <span>전체 요청</span>
-          <strong>
-            {summary ? total : "—"}
-            <small>건</small>
-          </strong>
-          <p>현재 필터 기준</p>
-        </div>
-        <div className="metric">
-          <span>진행 중</span>
-          <strong>
-            {counts?.in_progress || 0}
-            <small>건</small>
-          </strong>
-          <p>조치가 진행되고 있어요</p>
-        </div>
+      <section className="release-summary" aria-label="운영 반영 확인">
         <button
-          className={`metric pending-metric ${filters.deployment === "pending" ? "selected" : ""}`}
+          className={`release-review ${filters.deployment === "pending" ? "selected" : ""}`}
+          aria-pressed={filters.deployment === "pending"}
           onClick={() =>
             change(
               "deployment",
@@ -147,48 +133,59 @@ export function Board({ list = false }: { list?: boolean }) {
             )
           }
         >
-          <span>
-            <i className="dot amber" />
-            운영 반영 대기 <b>↗</b>
+          <span className="release-route">
+            테스트 <span aria-hidden="true">→</span> 운영
           </span>
-          <strong>
-            {summary?.pending || 0}
-            <small>건</small>
-          </strong>
-          <p>테스트 반영 · 운영 미반영</p>
+          <span className="release-answer">
+            <strong>
+              {summary ? (summary.pending || 0).toLocaleString() : "—"}
+            </strong>
+            <span>건 운영 반영 대기</span>
+          </span>
+          <span className="release-link">
+            {filters.deployment === "pending"
+              ? "전체로 돌아가기"
+              : "미반영 요청 확인"}{" "}
+            <span aria-hidden="true">→</span>
+          </span>
         </button>
-        <div className="metric">
-          <span>조치 완료</span>
-          <strong>
-            {counts?.completed || 0}
-            <small>건</small>
-          </strong>
-          <p>운영 반영 여부는 별도 확인</p>
-        </div>
-      </div>
+        <dl className="scope-summary">
+          <div>
+            <dt>현재 조건의 요청</dt>
+            <dd>
+              {summary ? total.toLocaleString() : "—"}
+              <small>건</small>
+            </dd>
+          </div>
+          <div>
+            <dt>진행 중</dt>
+            <dd>
+              {counts?.in_progress || 0}
+              <small>건</small>
+            </dd>
+          </div>
+          <div>
+            <dt>조치 완료</dt>
+            <dd>
+              {counts?.completed || 0}
+              <small>건</small>
+            </dd>
+          </div>
+        </dl>
+      </section>
       <div className="workspace-toolbar">
         <div>
           <Link
             className={!list ? "view-tab active" : "view-tab"}
-            to={{
-              pathname: "/board",
-              search: window.location.hash.split("?")[1]
-                ? "?" + window.location.hash.split("?")[1]
-                : "",
-            }}
+            to={{ pathname: "/board", search: location.search }}
           >
-            ▦ 칸반보드
+            칸반보드
           </Link>
           <Link
             className={list ? "view-tab active" : "view-tab"}
-            to={{
-              pathname: "/requests",
-              search: window.location.hash.split("?")[1]
-                ? "?" + window.location.hash.split("?")[1]
-                : "",
-            }}
+            to={{ pathname: "/requests", search: location.search }}
           >
-            ☷ 목록
+            목록
           </Link>
         </div>
         <button
@@ -196,7 +193,7 @@ export function Board({ list = false }: { list?: boolean }) {
           onClick={() => void load()}
           disabled={loading || busy}
         >
-          ↻ 새로고침
+          {loading ? "불러오는 중" : "새로고침"}
         </button>
       </div>
       <RequestFilters filters={filters} change={change} />
@@ -211,42 +208,56 @@ export function Board({ list = false }: { list?: boolean }) {
       {loading ? (
         <Loading />
       ) : list ? (
-        <div className="table-wrap">
+        <div className="table-wrap request-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>번호 / 고객사</th>
+                <th className="request-number">번호</th>
                 <th>요청사항</th>
                 <th>진행 상태</th>
-                <th>테스트 반영</th>
-                <th>운영 반영</th>
+                <th className="date-cell">테스트 반영</th>
+                <th className="date-cell">운영 반영</th>
               </tr>
             </thead>
             <tbody>
               {listing?.rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <small>#{r.number}</small>
-                    <br />
-                    {customers.find((c) => c.id === r.customer_id)?.name}
+                <tr
+                  key={r.id}
+                  className={
+                    r.requires_deployment &&
+                    r.test_deployed_at &&
+                    !r.production_deployed_at
+                      ? "awaiting-production"
+                      : ""
+                  }
+                >
+                  <td className="request-number" data-label="요청 번호">
+                    #{r.number}
                   </td>
                   <td>
-                    <Link className="row-title" to={`/requests/${r.id}`}>
+                    <Link
+                      className="row-title"
+                      to={`/requests/${r.id}`}
+                      state={{ returnTo: location.pathname + location.search }}
+                    >
                       {r.title}
                     </Link>
-                    <div className="muted">{formatDate(r.requested_on)}</div>
+                    <div className="muted">
+                      {customers.find((c) => c.id === r.customer_id)?.name} ·{" "}
+                      {formatDate(r.requested_on)}
+                    </div>
                   </td>
-                  <td>
+                  <td className="table-status">
                     <span className={`status-pill ${r.status}`}>
                       {statuses[r.status]}
                     </span>
                   </td>
-                  <td>
+                  <td className="date-cell" data-label="테스트">
                     {!r.requires_deployment
                       ? "해당 없음"
                       : formatDate(r.test_deployed_at)}
                   </td>
-                  <td>
+                  <td className="date-cell" data-label="운영">
                     {!r.requires_deployment
                       ? "해당 없음"
                       : formatDate(r.production_deployed_at)}
@@ -261,7 +272,9 @@ export function Board({ list = false }: { list?: boolean }) {
               이전
             </button>
             <span>
-              {page + 1} / {Math.max(1, Math.ceil((listing?.total || 0) / 30))}
+              {listing?.total
+                ? `${page * 30 + 1}–${Math.min((page + 1) * 30, listing.total)} / ${listing.total}건`
+                : "0건"}
             </span>
             <button
               disabled={(page + 1) * 30 >= (listing?.total || 0)}
@@ -325,9 +338,6 @@ function Column({
           <i className={`dot ${status}`} />
           {statuses[status]} <b>{result?.total || 0}</b>
         </span>
-        <span className="column-dots" aria-hidden="true">
-          •••
-        </span>
       </header>
       <div className="column-body">
         {result?.rows.map((r) => (
@@ -354,6 +364,7 @@ function RequestCard({
   move: (r: RequestRow, s: Status) => Promise<void>;
   busy: boolean;
 }) {
+  const location = useLocation();
   const { customers, people } = useSession();
   const writable =
     !demo &&
@@ -389,14 +400,42 @@ function RequestCard({
           <small>#{r.number}</small>
         )}
       </div>
-      <Link to={`/requests/${r.id}`} className="card-title">
+      <Link
+        to={`/requests/${r.id}`}
+        className="card-title"
+        state={{ returnTo: location.pathname + location.search }}
+      >
         {r.title}
       </Link>
-      <div
-        className={`deployment-tag ${r.requires_deployment && !r.production_deployed_at && r.test_deployed_at ? "pending" : r.production_deployed_at ? "deployed" : ""}`}
-      >
-        {r.production_deployed_at ? "✓ " : ""}
-        {deploymentLabel(r)}
+      <div className="environment-pair" aria-label={deploymentLabel(r)}>
+        <span>
+          테스트{" "}
+          <b>
+            {!r.requires_deployment
+              ? "해당 없음"
+              : r.test_deployed_at
+                ? "반영"
+                : "미반영"}
+          </b>
+        </span>
+        <span
+          className={
+            r.requires_deployment &&
+            r.test_deployed_at &&
+            !r.production_deployed_at
+              ? "release-gap"
+              : ""
+          }
+        >
+          운영{" "}
+          <b>
+            {!r.requires_deployment
+              ? "해당 없음"
+              : r.production_deployed_at
+                ? "반영"
+                : "미반영"}
+          </b>
+        </span>
       </div>
       <div className="card-meta">
         <span className="avatar">

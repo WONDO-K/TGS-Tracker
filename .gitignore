@@ -9,3 +9,4 @@ work/
 supabase/.temp/
 test-results/
 playwright-report/
+.taste-skill/

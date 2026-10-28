@@ -61,7 +61,6 @@ export function AuthPage({
           </span>
         </Link>
         <div>
-          <span className="eyebrow">FROM REQUEST TO RELEASE</span>
           <h1>
             요청의 시작부터
             <br />
@@ -77,13 +76,12 @@ export function AuthPage({
             <i>→</i>
             <span>조치</span>
             <i>→</i>
-            <span>운영 반영 ✓</span>
+            <span>운영 반영</span>
           </div>
         </div>
         <small>TGS · Internal workspace</small>
       </section>
       <section className="auth-form">
-        <div className="eyebrow">TGS WORKSPACE</div>
         <h2>
           {mode === "login"
             ? "다시 만나 반갑습니다"
