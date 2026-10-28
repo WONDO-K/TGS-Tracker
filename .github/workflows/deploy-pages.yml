@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'live: 실제 업무 / demo: 가상 데이터 읽기 전용'
+        description: "live: 실제 업무 / demo: 가상 데이터 읽기 전용"
         type: choice
         options: [demo, live]
         default: demo

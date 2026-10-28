@@ -43,13 +43,17 @@ where email = '본인@회사이메일';
 초대 템플릿:
 
 ```html
-<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">TGS Tracker 비밀번호 설정</a>
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite"
+  >TGS Tracker 비밀번호 설정</a
+>
 ```
 
 비밀번호 재설정 템플릿:
 
 ```html
-<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery">비밀번호 재설정</a>
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery"
+  >비밀번호 재설정</a
+>
 ```
 
 6. 실제 동료 초대 전 Custom SMTP를 설정하고 발신자·수신자 제한, 발송 한도와 메일 도착을 확인합니다. 기본 메일 발송 설정만으로 임의의 수신자에게 전달된다고 가정하지 않습니다.
@@ -78,10 +82,10 @@ npx supabase functions deploy invite-user
 2. `main` 브랜치의 push가 검증·빌드·배포를 실행합니다. PR은 검증과 빌드만 수행합니다.
 3. 기본 모드는 `demo`입니다. 실제 업무 운영 시 Settings → Secrets and variables → Actions → **Variables**에 아래를 지정합니다.
 
-| 이름 | 값 |
-|---|---|
-| APP_MODE | live |
-| SUPABASE_URL | 프로젝트 URL |
+| 이름                     | 값                    |
+| ------------------------ | --------------------- |
+| APP_MODE                 | live                  |
+| SUPABASE_URL             | 프로젝트 URL          |
 | SUPABASE_PUBLISHABLE_KEY | 공개용 publishable 키 |
 
 위 값은 정적 JS에 포함됩니다. **비밀 키를 넣지 않습니다.** `APP_MODE=live`인데 연결값이 없으면 배포 빌드는 실패합니다. Actions → Run workflow에서 demo/live를 선택할 수도 있습니다. 모드를 바꾸면 같은 Pages 주소의 배포가 교체되므로 공개 포트폴리오와 실무는 다른 저장소/배포로 분리하세요.

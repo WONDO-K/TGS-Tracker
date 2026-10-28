@@ -35,10 +35,10 @@
 
 ### 검토한 접근
 
-| 접근 | 장점 | 비용/판단 |
-|---|---|---|
+| 접근                                 | 장점                                      | 비용/판단                                           |
+| ------------------------------------ | ----------------------------------------- | --------------------------------------------------- |
 | React + Vite + TypeScript + Supabase | 별도 상시 서버 없이 업무 화면 구현에 집중 | 권장안. 기존 대화에서 제안한 구성을 기본값으로 채택 |
-| Next.js + Supabase | 서버 렌더링과 서버 기능을 함께 확장 | 현재 요구에는 이점이 작고 학습 범위가 늘어남 |
+| Next.js + Supabase                   | 서버 렌더링과 서버 기능을 함께 확장       | 현재 요구에는 이점이 작고 학습 범위가 늘어남        |
 
 Supabase는 Auth, PostgreSQL, Storage를 담당한다. 화면은 React Router와 일반 CSS로 구성하고, 칸반 이동에는 접근성을 지원하는 드래그 라이브러리를 사용한다. 드래그 없이 상태 선택으로도 동일한 작업을 할 수 있게 한다. Redux, 자체 API 서버, ORM, 범용 권한 엔진은 추가하지 않는다. 상세 패키지 버전은 구현 시 공식 호환 버전을 확인해 잠금 파일로 고정한다.
 
@@ -81,16 +81,16 @@ GitHub → GitHub Actions → GitHub Pages 정적 빌드 배포
 
 ### 권한표
 
-| 동작 | 일반 사용자 | 관리자 |
-|---|---|---|
-| 고객사·요청 조회 | 담당 고객사만 | 전체 |
-| 요청 등록·수정, 조치 추가, 배포 정보 수정 | 활성 담당 고객사만 | 활성 고객사 전체 |
-| 이미지 조회·첨부 | 요청 접근 범위와 동일 | 전체, 쓰기는 활성 고객사만 |
-| 이미지 제거 | 본인 첨부만, 활성·미보관 요청에서 | 활성·미보관 요청에서 전체 |
-| 요청 보관·복원 | 불가 | 가능 |
-| 고객사·사용자·담당 배정 관리 | 불가 | 가능 |
-| 자기 표시 이름 변경 | 가능 | 가능 |
-| 관리자 역할 부여·해제 | 불가 | 가능, 마지막 관리자 보호 |
+| 동작                                      | 일반 사용자                       | 관리자                     |
+| ----------------------------------------- | --------------------------------- | -------------------------- |
+| 고객사·요청 조회                          | 담당 고객사만                     | 전체                       |
+| 요청 등록·수정, 조치 추가, 배포 정보 수정 | 활성 담당 고객사만                | 활성 고객사 전체           |
+| 이미지 조회·첨부                          | 요청 접근 범위와 동일             | 전체, 쓰기는 활성 고객사만 |
+| 이미지 제거                               | 본인 첨부만, 활성·미보관 요청에서 | 활성·미보관 요청에서 전체  |
+| 요청 보관·복원                            | 불가                              | 가능                       |
+| 고객사·사용자·담당 배정 관리              | 불가                              | 가능                       |
+| 자기 표시 이름 변경                       | 가능                              | 가능                       |
+| 관리자 역할 부여·해제                     | 불가                              | 가능, 마지막 관리자 보호   |
 
 사용 중지 고객사와 보관 요청은 읽기 전용이다. 사용 중지 고객사도 기존 담당자는 조회할 수 있으며 필터에서 명시적으로 선택한다. 담당 배정을 해제하면 해당 고객사에 대한 읽기 권한도 없어진다. 사용 중지 고객사의 요청을 다시 수정하려면 먼저 고객사를 활성화한다. 운영 반영 완료 요청도 활성·미보관 상태라면 메모 등 수정이 가능하다.
 
@@ -100,12 +100,12 @@ GitHub → GitHub Actions → GitHub Pages 정적 빌드 배포
 
 ### 칸반 상태
 
-| 값 | 표시 | 의미 |
-|---|---|---|
-| received | 접수 | 등록 후 작업 전 |
-| in_progress | 진행 중 | 분석·개발·수정 중 |
-| verification | 확인 대기 | 조치 후 테스트 또는 확인 중 |
-| completed | 완료 | 조치·확인 완료. 운영 반영 여부와 별개 |
+| 값           | 표시      | 의미                                  |
+| ------------ | --------- | ------------------------------------- |
+| received     | 접수      | 등록 후 작업 전                       |
+| in_progress  | 진행 중   | 분석·개발·수정 중                     |
+| verification | 확인 대기 | 조치 후 테스트 또는 확인 중           |
+| completed    | 완료      | 조치·확인 완료. 운영 반영 여부와 별개 |
 
 상태는 순차 이동을 강제하지 않고 되돌릴 수 있다. 보류 사유는 내부 메모로 남긴다. 완료는 운영 배포 완료를 뜻하지 않는다.
 
@@ -177,14 +177,14 @@ Auth가 돌아올 실제 주소는 404가 나지 않는 배포 루트 `https://<
 
 ID는 UUID, 요청 표시 번호는 DB identity bigint다. 생성/수정 시각은 `timestamptz`, 요청일은 `date`를 사용한다. 아래 표는 논리 스키마이며 구현 시 SQL 마이그레이션으로 제약·인덱스·권한까지 함께 작성한다.
 
-| 테이블 | 주요 필드와 제약 |
-|---|---|
-| profiles | id PK→auth.users, display_name, email, role(admin/member), is_active(default false), created_at. Auth 사용자 생성 트리거는 안전한 기본값(member/inactive)만 설정. 역할은 사용자 metadata에서 복사 금지 |
-| customers | id, name unique, code unique, is_active(default true), created_at, updated_at |
-| customer_members | customer_id FK, user_id FK→profiles, created_at. 두 ID 복합 PK |
-| requests | id, number unique identity, customer_id FK, title, description, requester_name nullable, requested_on, status, requires_deployment, test_deployed_at nullable, production_deployed_at nullable, action_summary(default ''), created_by FK, updated_by FK, created_at, updated_at, archived_at nullable, version integer(default 1) |
-| request_activities | id, request_id FK, kind(action/note/system), body, metadata jsonb, created_by FK, created_at. append-only |
-| request_attachments | id, request_id FK, storage_path unique, original_name, mime_type, size_bytes, state(pending/ready), created_by FK, created_at |
+| 테이블              | 주요 필드와 제약                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| profiles            | id PK→auth.users, display_name, email, role(admin/member), is_active(default false), created_at. Auth 사용자 생성 트리거는 안전한 기본값(member/inactive)만 설정. 역할은 사용자 metadata에서 복사 금지                                                                                                                             |
+| customers           | id, name unique, code unique, is_active(default true), created_at, updated_at                                                                                                                                                                                                                                                      |
+| customer_members    | customer_id FK, user_id FK→profiles, created_at. 두 ID 복합 PK                                                                                                                                                                                                                                                                     |
+| requests            | id, number unique identity, customer_id FK, title, description, requester_name nullable, requested_on, status, requires_deployment, test_deployed_at nullable, production_deployed_at nullable, action_summary(default ''), created_by FK, updated_by FK, created_at, updated_at, archived_at nullable, version integer(default 1) |
+| request_activities  | id, request_id FK, kind(action/note/system), body, metadata jsonb, created_by FK, created_at. append-only                                                                                                                                                                                                                          |
+| request_attachments | id, request_id FK, storage_path unique, original_name, mime_type, size_bytes, state(pending/ready), created_by FK, created_at                                                                                                                                                                                                      |
 
 사용자·고객사·요청 참조에 연쇄 삭제를 설정하지 않는다. 일반 역할에 업무 데이터의 직접 삭제 권한을 부여하지 않는다.
 
@@ -207,15 +207,15 @@ ID는 UUID, 요청 표시 번호는 DB identity bigint다. 생성/수정 시각�
 
 일반 역할의 직접 INSERT/UPDATE/DELETE를 제한하고 검증을 수행하는 소수의 DB 함수(RPC)로 업무 변경을 처리한다.
 
-| 함수 | 동작 |
-|---|---|
-| create_request(payload) | 작성자를 설정하고 요청 ID 반환 |
-| update_request(id, expected_version, patch) | 허용 필드만 변경. 버전 충돌 시 거절. 상태·배포 이벤트는 같은 트랜잭션에서 기록 |
-| add_request_activity(request_id, kind, body) | action/note 추가만 허용. system 위조 금지 |
-| set_request_archived(id, expected_version, archived) | 관리자만 보관·복원 및 이벤트 기록 |
-| save_customer(...) | 관리자만 고객사 생성·수정 |
-| set_customer_members(user_id, customer_ids) | 관리자만 담당 고객사 일괄 변경 |
-| set_user_access(...) | 관리자만 역할·활성 상태 변경. 마지막 활성 관리자 보호 |
+| 함수                                                 | 동작                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------ |
+| create_request(payload)                              | 작성자를 설정하고 요청 ID 반환                                                 |
+| update_request(id, expected_version, patch)          | 허용 필드만 변경. 버전 충돌 시 거절. 상태·배포 이벤트는 같은 트랜잭션에서 기록 |
+| add_request_activity(request_id, kind, body)         | action/note 추가만 허용. system 위조 금지                                      |
+| set_request_archived(id, expected_version, archived) | 관리자만 보관·복원 및 이벤트 기록                                              |
+| save_customer(...)                                   | 관리자만 고객사 생성·수정                                                      |
+| set_customer_members(user_id, customer_ids)          | 관리자만 담당 고객사 일괄 변경                                                 |
+| set_user_access(...)                                 | 관리자만 역할·활성 상태 변경. 마지막 활성 관리자 보호                          |
 
 SECURITY DEFINER 함수도 auth.uid(), 현재 활성 여부, 담당 범위를 매번 검사한다. 소유자 권한으로 RLS를 우회할 수 있으므로 함수 내부의 명시적 검증이 필수다. PUBLIC/anon 실행 권한은 제거하고 authenticated에 필요한 함수만 허용한다. 오류 메시지로 다른 고객사의 존재나 데이터를 노출하지 않는다.
 
@@ -333,4 +333,3 @@ supabase/
 - [Vite 정적 배포](https://vite.dev/guide/static-deploy.html)
 
 설계를 확인한 다음 SQL 마이그레이션과 권한 검증부터 구현할 수 있다. 이번 산출물은 설계서이며 앱 생성·외부 서비스 생성·배포는 수행하지 않았다.
-
