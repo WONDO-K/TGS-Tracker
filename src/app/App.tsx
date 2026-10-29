@@ -19,7 +19,10 @@ import { Alert, Loading } from "../components/UI";
 import { client, configured, demo } from "../lib/supabase";
 import { errorMessage } from "../lib/domain";
 import { rpc } from "../lib/api";
+import { Brand } from "../components/Brand";
+import { ConfirmProvider } from "../components/Confirm";
 export function App({ authError = "" }: { authError?: string }) {
+  const [callbackError, setCallbackError] = useState(authError);
   if (!demo && !configured)
     return (
       <main className="setup">
@@ -37,49 +40,74 @@ export function App({ authError = "" }: { authError?: string }) {
   return (
     <HashRouter>
       <SessionProvider>
-        <Routes>
-          <Route
-            path="/login"
-            element={<AuthPage initialError={authError} />}
-          />
-          <Route path="/reset-password" element={<AuthPage mode="reset" />} />
-          <Route
-            path="/set-password"
-            element={<AuthPage mode="set" initialError={authError} />}
-          />
-          <Route element={<Guard />}>
-            <Route element={<Layout />}>
-              <Route path="/board" element={<Board />} />
-              <Route path="/requests" element={<Board list />} />
-              <Route path="/requests/:id" element={<RequestDetail />} />
-              <Route
-                path="/account"
-                element={demo ? <Navigate to="/board" /> : <Account />}
-              />
-              <Route
-                path="/requests/new"
-                element={demo ? <Navigate to="/board" /> : <NewRequest />}
-              />
-              <Route
-                path="/admin/customers"
-                element={
-                  <AdminGuard>
-                    <Customers />
-                  </AdminGuard>
-                }
-              />
-              <Route
-                path="/admin/users"
-                element={
-                  <AdminGuard>
-                    <Users />
-                  </AdminGuard>
-                }
-              />
-              <Route path="*" element={<Navigate to="/board" replace />} />
+        <ConfirmProvider>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                <AuthPage
+                  initialError={callbackError}
+                  onDismissError={() => setCallbackError("")}
+                />
+              }
+            />
+            <Route path="/reset-password" element={<AuthPage mode="reset" />} />
+            <Route
+              path="/set-password"
+              element={
+                <AuthPage
+                  mode="set"
+                  initialError={callbackError}
+                  onDismissError={() => setCallbackError("")}
+                />
+              }
+            />
+            <Route element={<Guard />}>
+              <Route element={<Layout />}>
+                <Route path="/board" element={<Board />} />
+                <Route path="/requests" element={<Board list />} />
+                <Route path="/requests/:id" element={<RequestDetail />} />
+                <Route
+                  path="/account"
+                  element={demo ? <Navigate to="/board" /> : <Account />}
+                />
+                <Route
+                  path="/requests/new"
+                  element={demo ? <Navigate to="/board" /> : <NewRequest />}
+                />
+                <Route
+                  path="/admin/customers"
+                  element={
+                    <AdminGuard>
+                      <Customers />
+                    </AdminGuard>
+                  }
+                />
+                <Route
+                  path="/admin/users"
+                  element={
+                    <AdminGuard>
+                      <Users />
+                    </AdminGuard>
+                  }
+                />
+                <Route index element={<Navigate to="/board" replace />} />
+                <Route
+                  path="*"
+                  element={
+                    <section className="form-panel">
+                      <h1>페이지를 찾을 수 없습니다</h1>
+                      <p>주소가 변경되었거나 사용할 수 없는 화면입니다.</p>
+                      <Link className="button primary" to="/board">
+                        진행 현황으로 이동
+                      </Link>
+                    </section>
+                  }
+                />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
+          </Routes>
+        </ConfirmProvider>
       </SessionProvider>
     </HashRouter>
   );
@@ -116,75 +144,68 @@ function AdminGuard({ children }: { children: ReactNode }) {
 }
 function Layout() {
   const { profile, customers } = useSession();
-  const links = (
+  const mainLinks = (
     <>
       <NavLink to="/board">진행 현황</NavLink>
-      <NavLink to="/requests">요청 목록</NavLink>
-      {!demo && profile?.role === "admin" && (
-        <>
-          <NavLink to="/admin/customers">고객사 관리</NavLink>
-          <NavLink to="/admin/users">사용자 관리</NavLink>
-        </>
-      )}
+      <NavLink to="/requests" end>
+        요청 목록
+      </NavLink>
     </>
   );
+  const adminLinks =
+    !demo && profile?.role === "admin" ? (
+      <>
+        <Link to="/requests?archived=true">보관함</Link>
+        <NavLink to="/admin/customers">고객사 관리</NavLink>
+        <NavLink to="/admin/users">사용자 관리</NavLink>
+      </>
+    ) : null;
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="header-inner">
-          <Link to="/board" className="brand">
-            <svg viewBox="0 0 30 24" width="30" height="24" aria-hidden="true">
-              <path
-                d="M2 4h9v8h9M2 12h5v8h20M20 8l4 4-4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>
-              TGS <strong>Tracker</strong>
-            </span>
-          </Link>
-          <nav className="desktop-nav" aria-label="주 메뉴">
-            {links}
-          </nav>
-          <div className="header-account">
-            {demo ? (
-              <span className="demo-label">체험용 데이터</span>
-            ) : (
-              <>
-                <Link to="/account">{profile?.display_name}</Link>
-                <button
-                  className="quiet"
-                  onClick={() => void client().auth.signOut()}
-                >
-                  로그아웃
-                </button>
-              </>
-            )}
+      <aside className="sidebar">
+        <Brand />
+        <p className="nav-label">업무</p>
+        <nav aria-label="주 메뉴">{mainLinks}</nav>
+        {adminLinks && (
+          <>
+            <p className="nav-label">관리자</p>
+            <nav aria-label="관리자 메뉴">{adminLinks}</nav>
+          </>
+        )}
+        <div className="sidebar-foot">
+          <div className="customer-scope">
+            <small>접근 가능한 고객사</small>
+            <strong>{customers.length}곳</strong>
           </div>
-          <details className="mobile-menu">
-            <summary>메뉴</summary>
-            <nav
-              aria-label="모바일 메뉴"
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest("a"))
-                  e.currentTarget.closest("details")!.open = false;
-              }}
-            >
-              {links}
-              {!demo && (
-                <>
-                  <Link to="/account">내 계정</Link>
-                  <button onClick={() => void client().auth.signOut()}>
-                    로그아웃
-                  </button>
-                </>
-              )}
-            </nav>
-          </details>
+          <div className="sidebar-person">
+            <span className="avatar">{profile?.display_name.slice(0, 1)}</span>
+            <div>
+              <strong>{profile?.display_name}</strong>
+              <small>
+                {demo
+                  ? "읽기 전용 데모"
+                  : profile?.role === "admin"
+                    ? "관리자"
+                    : "팀 멤버"}
+              </small>
+            </div>
+          </div>
+          {!demo && (
+            <div className="sidebar-account">
+              <Link to="/account">내 계정</Link>
+              <button
+                className="quiet"
+                onClick={() => void client().auth.signOut()}
+              >
+                로그아웃
+              </button>
+            </div>
+          )}
         </div>
+      </aside>
+      <header className="mobile-shell">
+        <Brand />
+        <span>{demo ? "읽기 전용 데모" : "TGS 업무"}</span>
       </header>
       <div className="main-area">
         <main className="page-content">
@@ -193,12 +214,45 @@ function Layout() {
               담당 고객사 배정이 필요합니다. 관리자에게 문의해주세요.
             </Alert>
           )}
+          {demo && (
+            <div className="demo-banner">
+              포트폴리오 데모 <span>가상 데이터 · 읽기 전용</span>
+            </div>
+          )}
           <Outlet />
         </main>
         <footer className="site-footer">
           <span>TGS Tracker · 고객사 요청·조치·배포 관리</span>
           <span>{demo ? "가상 데이터 / 읽기 전용" : "TGS 내부 업무"}</span>
         </footer>
+      </div>
+      <div className="bottom-nav">
+        <NavLink to="/board">현황</NavLink>
+        <NavLink to="/requests" end>
+          목록
+        </NavLink>
+        {!demo && <NavLink to="/requests/new">요청 등록</NavLink>}
+        <details className="mobile-menu">
+          <summary>메뉴</summary>
+          <nav
+            aria-label="모바일 메뉴"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest("a"))
+                e.currentTarget.closest("details")!.open = false;
+            }}
+          >
+            {mainLinks}
+            {adminLinks}
+            {!demo && (
+              <>
+                <Link to="/account">내 계정</Link>
+                <button onClick={() => void client().auth.signOut()}>
+                  로그아웃
+                </button>
+              </>
+            )}
+          </nav>
+        </details>
       </div>
     </div>
   );

@@ -1,0 +1,274 @@
+.admin-screen .admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 18px;
+  align-items: start;
+}
+.admin-screen .admin-table {
+  margin: 0;
+  overflow-x: auto;
+}
+.admin-screen .admin-table table {
+  min-width: 570px;
+  width: 100%;
+}
+.admin-screen .admin-table th {
+  padding: 14px 16px;
+  white-space: nowrap;
+}
+.admin-screen .admin-table td {
+  padding: 14px 16px;
+  height: 68px;
+}
+.admin-screen .admin-table td:last-child {
+  text-align: right;
+}
+.admin-screen .admin-table tr.selected td {
+  background: #f3f6fe;
+}
+.admin-screen .admin-table td > strong {
+  white-space: nowrap;
+}
+.admin-screen .admin-editor {
+  padding: 24px;
+  margin: 0;
+}
+.admin-screen .admin-editor h2 {
+  margin: 0 0 20px;
+  font-size: 15px;
+}
+.admin-screen fieldset,
+.admin-invite-dialog fieldset {
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  border: 0;
+}
+.admin-screen .admin-editor label:not(.check):not(.admin-switch),
+.admin-invite-dialog label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.admin-screen .admin-editor input:not([type="checkbox"]),
+.admin-screen .admin-editor select,
+.admin-invite-dialog input {
+  width: 100%;
+  min-height: 48px;
+  background: #fafbfc;
+}
+.admin-screen .admin-editor .hint {
+  margin: -8px 0 18px;
+}
+.admin-screen .admin-note,
+.admin-invite-dialog .admin-note {
+  background: #f4f5f7;
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #4b5567;
+  font-size: 12.5px;
+  line-height: 1.75;
+  margin: 12px 0 18px;
+}
+.admin-screen .admin-note.warning,
+.admin-invite-dialog .admin-note.warning {
+  background: #fbf1dc;
+  color: #6b4a00;
+}
+.admin-screen .admin-footnote {
+  font-size: 12px;
+  color: #6b7385;
+  padding: 0 6px;
+  line-height: 1.7;
+}
+.admin-screen .admin-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  gap: 12px;
+  position: relative;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.admin-screen .admin-switch input {
+  position: absolute;
+  right: 0;
+  opacity: 0;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+}
+.admin-screen .admin-switch > span {
+  width: 44px;
+  height: 26px;
+  background: #c3c9d4;
+  border-radius: 13px;
+  position: relative;
+  flex: none;
+  pointer-events: none;
+}
+.admin-screen .admin-switch > span:after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+}
+.admin-screen .admin-switch input:checked + span {
+  background: #14171f;
+}
+.admin-screen .admin-switch input:checked + span:after {
+  left: 21px;
+}
+.admin-screen .admin-switch input:focus-visible + span {
+  outline: 2px solid #4a70ea;
+  outline-offset: 3px;
+}
+.admin-screen .admin-identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.admin-screen .admin-identity .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+  flex: none;
+}
+.admin-screen .admin-identity strong {
+  display: block;
+  white-space: nowrap;
+}
+.admin-screen .admin-identity small {
+  display: block;
+  margin-top: 3px;
+  color: #6b7385;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.admin-screen .admin-role,
+.admin-screen .admin-customer-tags > span {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f2f3f6;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #4b5567;
+  white-space: nowrap;
+}
+.admin-screen .admin-role.administrator {
+  background: #14171f;
+  color: white;
+}
+.admin-screen .admin-customer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 95px;
+}
+.admin-screen .admin-customer-tags small {
+  color: #6b7385;
+  white-space: nowrap;
+}
+.admin-screen .admin-assignments {
+  margin-bottom: 20px;
+}
+.admin-screen .admin-assignments legend {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.admin-screen .admin-assignments label.check {
+  min-height: 46px;
+  border: 1px solid #e6e8ed;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.admin-screen .admin-assignments small {
+  color: #6b7385;
+  font-size: 12px;
+}
+.admin-screen .form-actions,
+.admin-invite-dialog .form-actions {
+  justify-content: stretch;
+  gap: 10px;
+  margin-top: 20px;
+}
+.admin-screen .form-actions button,
+.admin-invite-dialog .form-actions button {
+  flex: 1;
+}
+.admin-screen .admin-resend {
+  margin-top: 16px;
+  width: 100%;
+  font-size: 12px;
+  color: #4b5567;
+  background: transparent;
+}
+.admin-invite-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 30px;
+  border: 0;
+  border-radius: 24px;
+  color: #14171f;
+  background: white;
+  box-shadow: 0 30px 60px -20px #0008;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.admin-invite-dialog::backdrop {
+  background: #2b3243b8;
+}
+.admin-invite-dialog h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.admin-invite-dialog > p {
+  font-size: 14px;
+  color: #4b5567;
+  line-height: 1.65;
+  margin: 0 0 22px;
+}
+@media (max-width: 1200px) {
+  .admin-screen .admin-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+@media (max-width: 1000px) {
+  .admin-screen .admin-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-screen .admin-table table {
+    min-width: 620px;
+  }
+  .admin-screen .admin-editor {
+    padding: 22px;
+  }
+}
+@media (max-width: 600px) {
+  .admin-screen .page-heading {
+    align-items: start;
+  }
+  .admin-screen .page-heading > button {
+    padding: 0 12px;
+    font-size: 12px;
+  }
+  .admin-screen .admin-editor {
+    padding: 22px 18px;
+  }
+  .admin-invite-dialog {
+    padding: 26px 22px;
+  }
+}

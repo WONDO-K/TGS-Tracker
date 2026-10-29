@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSession } from "../../app/Session";
 import type { Filters } from "../../lib/types";
+const deploymentOptions = [
+  ["", "전체"],
+  ["untested", "테스트 미반영"],
+  ["pending", "테스트 반영 · 운영 미반영"],
+  ["production", "운영 반영"],
+  ["unnecessary", "배포 불필요"],
+];
 export function useFilters() {
   const [params, setParams] = useSearchParams();
   const key = params.toString();
@@ -77,6 +84,7 @@ export function RequestFilters({
             ))}
         </select>
         <select
+          className="mobile-deployment-select"
           aria-label="배포 상태 필터"
           value={filters.deployment}
           onChange={(e) => change("deployment", e.target.value)}
@@ -87,6 +95,25 @@ export function RequestFilters({
           <option value="production">운영 반영</option>
           <option value="unnecessary">배포 불필요</option>
         </select>
+      </div>
+      <div
+        className="deployment-filters"
+        role="group"
+        aria-label="배포 상태 선택"
+      >
+        {deploymentOptions.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={
+              filters.deployment === value || (!filters.deployment && !value)
+            }
+            className={`${value === "pending" ? "pending-filter" : ""} ${(filters.deployment || "") === value ? "selected" : ""}`}
+            onClick={() => change("deployment", value)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       <details className="filter-more">
         <summary>

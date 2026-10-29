@@ -5,6 +5,7 @@ import { handleAuthCallback } from "./lib/auth";
 import { configured, demo } from "./lib/supabase";
 import { errorMessage } from "./lib/domain";
 import "./styles.css";
+import "./handoff.css";
 async function start() {
   let authError = "";
   if (!demo && configured) {

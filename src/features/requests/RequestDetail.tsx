@@ -24,7 +24,10 @@ import { client, demo } from "../../lib/supabase";
 import { prepareImage } from "../../lib/image";
 import type { Activity, Attachment, RequestRow, Status } from "../../lib/types";
 import { ImagePicker } from "./Images";
+import { useConfirm } from "../../components/Confirm";
+import { DeploymentRail } from "../../components/DeploymentRail";
 export function RequestDetail() {
+  const confirm = useConfirm();
   const { id } = useParams(),
     location = useLocation(),
     { customers, people, profile } = useSession();
@@ -39,6 +42,18 @@ export function RequestDetail() {
     [body, setBody] = useState(""),
     [kind, setKind] = useState("action"),
     [files, setFiles] = useState<File[]>([]);
+  const [copyFallback, setCopyFallback] = useState(false);
+  const draftText = form
+    ? `제목: ${form.title}\n요청 내용:\n${form.description}\n조치 요약:\n${form.action_summary || ""}\n상태: ${statuses[form.status]}\n요청일: ${form.requested_on}\n요청자: ${form.requester_name || ""}\n배포 필요: ${form.requires_deployment ? "예" : "아니오"}\n테스트 반영: ${localDatetime(form.test_deployed_at)}\n운영 반영: ${localDatetime(form.production_deployed_at)}\n활동 입력:\n${body}`
+    : "";
+  async function copyDraft() {
+    try {
+      await navigator.clipboard.writeText(draftText);
+      setMessage("입력 내용을 복사했습니다.");
+    } catch {
+      setCopyFallback(true);
+    }
+  }
   const reservations = useRef(new Map<File, Attachment>());
   const load = useCallback(
     async (resetForm = true) => {
@@ -91,13 +106,28 @@ export function RequestDetail() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!form || !row) return;
+    try {
+      validateDeployment(
+        form.requires_deployment,
+        localDatetime(form.test_deployed_at),
+        localDatetime(form.production_deployed_at),
+      );
+    } catch (e) {
+      setError(errorMessage(e));
+      return;
+    }
+    if (
+      form.production_deployed_at &&
+      form.production_deployed_at !== row.production_deployed_at &&
+      !(await confirm({
+        title: "운영 반영 기록 확인",
+        message: `#${row.number} 요청의 운영 반영 시각을 ${formatDate(form.production_deployed_at, true)}으로 저장합니다. 진행 상태와 운영 반영 여부는 별도로 관리됩니다.`,
+        action: "변경사항 저장",
+      }))
+    )
+      return;
     await run(
       async () => {
-        validateDeployment(
-          form.requires_deployment,
-          localDatetime(form.test_deployed_at),
-          localDatetime(form.production_deployed_at),
-        );
         const {
           title,
           description,
@@ -161,7 +191,10 @@ export function RequestDetail() {
   if (loading) return <Loading />;
   if (!row || !form)
     return (
-      <Alert>{error || "요청을 찾을 수 없거나 접근 권한이 없습니다."}</Alert>
+      <>
+        <Alert>요청이 없거나 열람 권한이 없습니다.</Alert>
+        <Link to="/requests">요청 목록으로 이동</Link>
+      </>
     );
   const person = (uid: string) =>
     people.find((p) => p.id === uid)?.display_name || "사용자";
@@ -188,27 +221,55 @@ export function RequestDetail() {
       {error && (
         <Alert>
           {error}{" "}
+          <button className="text-button" onClick={() => void copyDraft()}>
+            내 입력 복사
+          </button>{" "}
           <button
             className="text-button"
-            onClick={() => {
+            onClick={async () => {
               if (
-                window.confirm(
-                  "입력 중인 변경사항을 버리고 최신 내용을 불러올까요?",
-                )
-              )
+                await confirm({
+                  title: "최신 내용 불러오기",
+                  message:
+                    "입력 중인 변경사항이 사라집니다. 필요한 내용은 먼저 복사해주세요.",
+                  danger: true,
+                  action: "불러오기",
+                })
+              ) {
+                setError("");
+                setCopyFallback(false);
                 void load();
+              }
             }}
           >
             최신 내용 불러오기
           </button>
         </Alert>
       )}
+      {copyFallback && (
+        <section className="form-panel">
+          <h2>입력 내용 보관</h2>
+          <p>
+            자동 복사가 허용되지 않았습니다. 아래 내용을 선택해서 복사해주세요.
+          </p>
+          <textarea
+            aria-label="복사할 내 입력"
+            readOnly
+            rows={10}
+            value={draftText}
+            onFocus={(e) => e.target.select()}
+          />
+          <button onClick={() => setCopyFallback(false)}>닫기</button>
+        </section>
+      )}
       {message && <Alert tone="info">{message}</Alert>}
       {!writable && (
         <Alert tone="info">
           {demo
             ? "포트폴리오 데모입니다. 가상 요청을 읽기 전용으로 제공합니다."
-            : "사용 중지 고객사 또는 보관된 요청은 읽기 전용입니다."}
+            : row.archived_at
+              ? "보관된 요청입니다. 내용과 이미지는 읽기 전용이며 관리자가 복원할 수 있습니다."
+              : "사용 중지 고객사의 요청입니다. 고객사 사용을 재개하면 다시 수정할 수 있습니다."}
         </Alert>
       )}
       <div className="detail-grid">
@@ -267,39 +328,46 @@ export function RequestDetail() {
               <hr />
               <h2>진행 및 배포</h2>
               <div className="form-grid">
-                <label>
-                  진행 상태
-                  <select
-                    value={form.status}
-                    onChange={(e) => field("status", e.target.value as Status)}
-                  >
-                    {Object.entries(statuses).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <fieldset className="state-buttons">
+                  <legend>진행 상태</legend>
+                  {Object.entries(statuses).map(([key, label]) => (
+                    <button
+                      type="button"
+                      key={key}
+                      className={key}
+                      aria-pressed={form.status === key}
+                      onClick={() => field("status", key as Status)}
+                    >
+                      <i className={`dot ${key}`} />
+                      {label}
+                    </button>
+                  ))}
+                </fieldset>
                 <label className="check">
                   <input
                     type="checkbox"
                     checked={form.requires_deployment}
-                    onChange={(e) => {
+                    onChange={async (e) => {
+                      const checked = e.target.checked;
                       if (
-                        !e.target.checked &&
+                        !checked &&
                         (form.test_deployed_at ||
                           form.production_deployed_at) &&
-                        !window.confirm(
-                          "배포 불필요로 변경하면 기존 반영일이 비워집니다. 계속할까요?",
-                        )
+                        !(await confirm({
+                          title: "배포 불필요로 변경할까요?",
+                          message:
+                            "저장하면 테스트·운영 반영일이 모두 비워집니다. 요청 내용과 조치 기록은 유지됩니다.",
+                          danger: true,
+                          action: "반영일 비우기",
+                        }))
                       )
                         return;
                       setForm((f) =>
                         f
                           ? {
                               ...f,
-                              requires_deployment: e.target.checked,
-                              ...(!e.target.checked
+                              requires_deployment: checked,
+                              ...(!checked
                                 ? {
                                     test_deployed_at: null,
                                     production_deployed_at: null,
@@ -406,6 +474,7 @@ export function RequestDetail() {
           <section className="detail-summary">
             <span className="request-context">운영 반영 확인</span>
             <h2>{deploymentLabel(row)}</h2>
+            <DeploymentRail request={row} />
             <dl>
               <div>
                 <dt>테스트 서버</dt>
@@ -495,13 +564,16 @@ export function RequestDetail() {
             <button
               className="danger wide"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
-                    row.archived_at
+                  await confirm({
+                    title: row.archived_at ? "요청 복원" : "요청 보관",
+                    message: row.archived_at
                       ? "요청을 복원할까요?"
                       : "요청을 보관할까요? 보관 후에는 읽기 전용이 됩니다.",
-                  )
+                    danger: !row.archived_at,
+                    action: row.archived_at ? "복원" : "보관",
+                  })
                 )
                   void run(
                     async () => {
@@ -549,6 +621,8 @@ function AttachmentItem({
     reload?: boolean,
   ) => Promise<void>;
 }) {
+  const confirm = useConfirm();
+  const viewer = useRef<HTMLDialogElement>(null);
   const [url, setUrl] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
@@ -574,10 +648,29 @@ function AttachmentItem({
   }, [a.storage_path, a.state]);
   return (
     <figure className="attachment">
+      <dialog
+        className="image-dialog"
+        ref={viewer}
+        aria-label={`${a.original_name} 이미지 뷰어`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) viewer.current?.close();
+        }}
+      >
+        <header>
+          <span>{a.original_name}</span>
+          <button onClick={() => viewer.current?.close()}>닫기</button>
+        </header>
+        {url && <img src={url} alt={a.original_name} />}
+      </dialog>
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer">
+        <button
+          className="image-open"
+          type="button"
+          aria-label={`${a.original_name} 확대`}
+          onClick={() => viewer.current?.showModal()}
+        >
           <img src={url} alt={a.original_name} />
-        </a>
+        </button>
       ) : (
         <div className="attachment-placeholder">
           {error ||
@@ -627,8 +720,15 @@ function AttachmentItem({
           <button
             className="danger"
             disabled={busy}
-            onClick={() => {
-              if (window.confirm("첨부 이미지를 삭제할까요?"))
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: "첨부 이미지 삭제",
+                  message: `${a.original_name} 파일을 삭제할까요? 삭제 후에는 다시 첨부해야 합니다.`,
+                  danger: true,
+                  action: "삭제",
+                })
+              )
                 void run(
                   async () => deleteAttachment(a),
                   "이미지를 삭제했습니다.",

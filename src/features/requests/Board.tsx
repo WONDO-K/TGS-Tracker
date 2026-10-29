@@ -19,6 +19,7 @@ import {
   statuses,
 } from "../../lib/domain";
 import { demo } from "../../lib/supabase";
+import { DeploymentRail } from "../../components/DeploymentRail";
 import type { ListResult, RequestRow, Status } from "../../lib/types";
 import { Alert, Empty, Loading, PageTitle } from "../../components/UI";
 import { RequestFilters, useFilters } from "./Filters";
@@ -41,9 +42,12 @@ export function Board({ list = false }: { list?: boolean }) {
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [mobileStatus, setMobileStatus] = useState<Status | null>(null);
+  const [moveNotice, setMoveNotice] = useState("");
   const key = JSON.stringify(filters);
   useEffect(() => {
     setPage(0);
+    setMobileStatus(null);
     setLimits({
       received: 30,
       in_progress: 30,
@@ -82,6 +86,8 @@ export function Board({ list = false }: { list?: boolean }) {
   const summary = list ? listing : results.received,
     counts = summary?.counts;
   const total = Object.values(counts || {}).reduce((a, b) => a + b, 0);
+  const activeStatus =
+    mobileStatus || statusKeys.find((k) => counts?.[k]) || "received";
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -89,6 +95,8 @@ export function Board({ list = false }: { list?: boolean }) {
   async function move(r: RequestRow, status: Status) {
     if (r.status === status || busy) return;
     setBusy(true);
+    setError("");
+    setMoveNotice(`${r.title} 상태를 저장하고 있습니다.`);
     try {
       await rpc("update_request", {
         id: r.id,
@@ -96,7 +104,9 @@ export function Board({ list = false }: { list?: boolean }) {
         patch: { status },
       });
       await load();
+      setMoveNotice(`${r.title} → ${statuses[status]} 상태로 변경했습니다.`);
     } catch (e) {
+      setMoveNotice("");
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -112,7 +122,7 @@ export function Board({ list = false }: { list?: boolean }) {
     <>
       <PageTitle
         eyebrow="REQUEST WORKSPACE"
-        title={list ? "요청 목록" : "진행 현황"}
+        title={filters.archived ? "보관함" : list ? "요청 목록" : "진행 현황"}
         description="테스트 반영 후, 운영에 빠진 요청을 확인합니다."
         action={
           !demo && (
@@ -122,57 +132,70 @@ export function Board({ list = false }: { list?: boolean }) {
           )
         }
       />
-      <section className="release-summary" aria-label="운영 반영 확인">
-        <button
-          className={`release-review ${filters.deployment === "pending" ? "selected" : ""}`}
-          aria-pressed={filters.deployment === "pending"}
-          onClick={() =>
-            change(
-              "deployment",
-              filters.deployment === "pending" ? "" : "pending",
-            )
-          }
+      <div className="overview-panels">
+        <section className="release-summary" aria-label="운영 반영 확인">
+          <button
+            className={`release-review ${filters.deployment === "pending" ? "selected" : ""}`}
+            aria-pressed={filters.deployment === "pending"}
+            onClick={() =>
+              change(
+                "deployment",
+                filters.deployment === "pending" ? "" : "pending",
+              )
+            }
+          >
+            <span
+              className={`pending-count ${summary?.pending ? "has-pending" : ""}`}
+            >
+              {summary ? summary.pending.toLocaleString() : "—"}
+            </span>
+            <span className="release-copy">
+              <strong>테스트 반영 · 운영 미반영</strong>
+              <span>조치가 끝나도 운영 반영 여부는 별도로 확인합니다.</span>
+            </span>
+            <span className="release-link">
+              {filters.deployment === "pending" ? "필터 해제" : "바로 보기"} →
+            </span>
+          </button>
+        </section>
+        <section
+          className="distribution"
+          aria-label="현재 필터의 진행 상태 분포"
         >
-          <span className="release-route">
-            테스트 <span aria-hidden="true">→</span> 운영
-          </span>
-          <span className="release-answer">
+          <div className="distribution-heading">
+            <span>진행 상태</span>
             <strong>
-              {summary ? (summary.pending || 0).toLocaleString() : "—"}
-            </strong>
-            <span>건 운영 반영 대기</span>
-          </span>
-          <span className="release-link">
-            {filters.deployment === "pending"
-              ? "전체로 돌아가기"
-              : "미반영 요청 확인"}{" "}
-            <span aria-hidden="true">→</span>
-          </span>
-        </button>
-        <dl className="scope-summary">
-          <div>
-            <dt>현재 조건의 요청</dt>
-            <dd>
               {summary ? total.toLocaleString() : "—"}
               <small>건</small>
-            </dd>
+            </strong>
           </div>
-          <div>
-            <dt>진행 중</dt>
-            <dd>
-              {counts?.in_progress || 0}
-              <small>건</small>
-            </dd>
+          <div
+            className="distribution-bar"
+            role="img"
+            aria-label={statusKeys
+              .map((s) => `${statuses[s]} ${counts?.[s] || 0}건`)
+              .join(", ")}
+          >
+            {statusKeys.map((s) => (
+              <span
+                key={s}
+                className={s}
+                style={{
+                  width: `${total ? ((counts?.[s] || 0) / total) * 100 : 0}%`,
+                }}
+              />
+            ))}
           </div>
-          <div>
-            <dt>조치 완료</dt>
-            <dd>
-              {counts?.completed || 0}
-              <small>건</small>
-            </dd>
+          <div className="distribution-legend">
+            {statusKeys.map((s) => (
+              <span key={s}>
+                <i className={`dot ${s}`} />
+                {statuses[s]} <b>{counts?.[s] || 0}</b>
+              </span>
+            ))}
           </div>
-        </dl>
-      </section>
+        </section>
+      </div>
       <div className="workspace-toolbar">
         <div>
           <Link
@@ -197,6 +220,13 @@ export function Board({ list = false }: { list?: boolean }) {
         </button>
       </div>
       <RequestFilters filters={filters} change={change} />
+      {filters.archived && (
+        <Alert tone="info">
+          보관된 요청은 읽기 전용입니다. 상세 화면에서 내용을 확인하고 복원할 수
+          있습니다.
+        </Alert>
+      )}
+      {moveNotice && <Alert tone="info">{moveNotice}</Alert>}
       {error && (
         <Alert>
           {error}{" "}
@@ -286,11 +316,50 @@ export function Board({ list = false }: { list?: boolean }) {
         </div>
       ) : (
         <DndContext sensors={sensors} onDragEnd={(e) => void dropped(e)}>
+          <div
+            className="mobile-stage-tabs"
+            role="tablist"
+            aria-label="진행 단계"
+          >
+            {statusKeys.map((s, index) => (
+              <button
+                key={s}
+                role="tab"
+                id={`stage-${s}`}
+                aria-controls={`lane-${s}`}
+                aria-selected={activeStatus === s}
+                tabIndex={activeStatus === s ? 0 : -1}
+                className={s}
+                onClick={() => setMobileStatus(s)}
+                onKeyDown={(e) => {
+                  const next =
+                    e.key === "ArrowRight"
+                      ? (index + 1) % statusKeys.length
+                      : e.key === "ArrowLeft"
+                        ? (index + statusKeys.length - 1) % statusKeys.length
+                        : e.key === "Home"
+                          ? 0
+                          : e.key === "End"
+                            ? statusKeys.length - 1
+                            : null;
+                  if (next === null) return;
+                  e.preventDefault();
+                  setMobileStatus(statusKeys[next]);
+                  e.currentTarget.parentElement
+                    ?.querySelectorAll("button")
+                    [next].focus();
+                }}
+              >
+                {statuses[s]} <span>{counts?.[s] || 0}</span>
+              </button>
+            ))}
+          </div>
           <div className="kanban">
             {statusKeys.map((s) => (
               <Column
                 key={s}
                 status={s}
+                active={activeStatus === s}
                 result={results[s]}
                 more={() => setLimits((v) => ({ ...v, [s]: v[s] + 30 }))}
                 move={move}
@@ -312,12 +381,14 @@ export function Board({ list = false }: { list?: boolean }) {
 }
 function Column({
   status,
+  active,
   result,
   more,
   move,
   busy,
 }: {
   status: Status;
+  active: boolean;
   result?: ListResult;
   more: () => void;
   move: (r: RequestRow, s: Status) => Promise<void>;
@@ -330,7 +401,9 @@ function Column({
   return (
     <section
       ref={setNodeRef}
-      className={`kanban-column ${isOver ? "over" : ""}`}
+      id={`lane-${status}`}
+      data-active={active}
+      className={`kanban-column ${status} ${isOver ? "over" : ""}`}
       aria-label={`${statuses[status]} 열`}
     >
       <header>
@@ -407,36 +480,6 @@ function RequestCard({
       >
         {r.title}
       </Link>
-      <div className="environment-pair" aria-label={deploymentLabel(r)}>
-        <span>
-          테스트{" "}
-          <b>
-            {!r.requires_deployment
-              ? "해당 없음"
-              : r.test_deployed_at
-                ? "반영"
-                : "미반영"}
-          </b>
-        </span>
-        <span
-          className={
-            r.requires_deployment &&
-            r.test_deployed_at &&
-            !r.production_deployed_at
-              ? "release-gap"
-              : ""
-          }
-        >
-          운영{" "}
-          <b>
-            {!r.requires_deployment
-              ? "해당 없음"
-              : r.production_deployed_at
-                ? "반영"
-                : "미반영"}
-          </b>
-        </span>
-      </div>
       <div className="card-meta">
         <span className="avatar">
           {people
@@ -451,6 +494,7 @@ function RequestCard({
       {(r.attachment_count || 0) > 0 && (
         <small className="muted">첨부 {r.attachment_count}개</small>
       )}
+      <DeploymentRail request={r} />
       {writable && (
         <select
           className="card-status"
