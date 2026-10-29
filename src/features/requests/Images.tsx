@@ -8,11 +8,13 @@ export function ImagePicker({
   onChange,
   disabled = false,
   remaining = 5,
+  onBusyChange,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
   remaining?: number;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -31,6 +33,7 @@ export function ImagePicker({
       return;
     }
     setBusy(true);
+    onBusyChange?.(true);
     try {
       const prepared = await Promise.all(selected.map(prepareImage));
       onChange([...files, ...prepared]);
@@ -38,6 +41,7 @@ export function ImagePicker({
       setError(errorMessage(e));
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
   function paste(e: ClipboardEvent) {

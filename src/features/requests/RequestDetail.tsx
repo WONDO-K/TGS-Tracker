@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useBlocker, useParams } from "react-router-dom";
 import { Alert, Loading } from "../../components/UI";
 import { useSession } from "../../app/Session";
 import {
@@ -26,6 +26,7 @@ import type { Activity, Attachment, RequestRow, Status } from "../../lib/types";
 import { ImagePicker } from "./Images";
 import { useConfirm } from "../../components/Confirm";
 import { DeploymentRail } from "../../components/DeploymentRail";
+import "./request-workspace.css";
 export function RequestDetail() {
   const confirm = useConfirm();
   const { id } = useParams(),
@@ -43,6 +44,83 @@ export function RequestDetail() {
     [kind, setKind] = useState("action"),
     [files, setFiles] = useState<File[]>([]);
   const [copyFallback, setCopyFallback] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null),
+    titleInput = useRef<HTMLInputElement>(null);
+  const dirty = editing && JSON.stringify(form) !== JSON.stringify(row);
+  useEffect(() => {
+    if (editing) titleInput.current?.focus();
+  }, [editing]);
+  const blocker = useBlocker(dirty),
+    navigationPending = useRef(false);
+  useEffect(() => {
+    if (blocker.state !== "blocked") {
+      navigationPending.current = false;
+      return;
+    }
+    if (navigationPending.current) return;
+    navigationPending.current = true;
+    void confirm({
+      title: "수정 중인 화면을 나갈까요?",
+      message:
+        "저장하지 않은 요청 수정은 사라집니다. 계속 수정하려면 취소를 선택해주세요.",
+      danger: true,
+      action: "나가기",
+    }).then((leave) => {
+      if (leave) {
+        setEditing(false);
+        blocker.proceed();
+      } else blocker.reset();
+    });
+  }, [blocker, confirm]);
+  useEffect(() => {
+    if (!dirty) return;
+    const prevent = (event: BeforeUnloadEvent) => event.preventDefault();
+    const logout = async (event: MouseEvent) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>(
+        "button[data-leave-session]",
+      );
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (
+        await confirm({
+          title: "수정 중인 화면을 나갈까요?",
+          message:
+            "저장하지 않은 요청 수정은 사라집니다. 로그아웃하려면 나가기를 선택해주세요.",
+          danger: true,
+          action: "나가기",
+        })
+      ) {
+        setEditing(false);
+        requestAnimationFrame(() => button.click());
+      }
+    };
+    window.addEventListener("beforeunload", prevent);
+    document.addEventListener("click", logout, true);
+    return () => {
+      window.removeEventListener("beforeunload", prevent);
+      document.removeEventListener("click", logout, true);
+    };
+  }, [dirty, confirm]);
+  async function cancelEdit() {
+    if (
+      dirty &&
+      !(await confirm({
+        title: "수정을 취소할까요?",
+        message:
+          "저장하지 않은 요청 수정은 사라집니다. 따로 저장한 활동 기록과 첨부 이미지는 유지됩니다.",
+        danger: true,
+        action: "수정 취소",
+      }))
+    )
+      return;
+    setForm(row);
+    setEditing(false);
+    setError("");
+    setCopyFallback(false);
+    requestAnimationFrame(() => editButton.current?.focus());
+  }
   const draftText = form
     ? `제목: ${form.title}\n요청 내용:\n${form.description}\n조치 요약:\n${form.action_summary || ""}\n상태: ${statuses[form.status]}\n요청일: ${form.requested_on}\n요청자: ${form.requester_name || ""}\n배포 필요: ${form.requires_deployment ? "예" : "아니오"}\n테스트 반영: ${localDatetime(form.test_deployed_at)}\n운영 반영: ${localDatetime(form.production_deployed_at)}\n활동 입력:\n${body}`
     : "";
@@ -69,8 +147,10 @@ export function RequestDetail() {
         ]);
         setActivities(a);
         setAttachments(f);
+        return true;
       } catch (e) {
         setError(errorMessage(e));
+        return false;
       } finally {
         setLoading(false);
       }
@@ -95,8 +175,18 @@ export function RequestDetail() {
     setMessage("");
     try {
       await action();
-      await load(resetForm);
+      if (!(await load(resetForm))) {
+        setError(
+          (previous) =>
+            `저장은 완료했지만 화면을 갱신하지 못했습니다. ${previous}`,
+        );
+        return;
+      }
       setMessage(success);
+      if (resetForm) {
+        setEditing(false);
+        requestAnimationFrame(() => editButton.current?.focus());
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -105,7 +195,7 @@ export function RequestDetail() {
   }
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!form || !row) return;
+    if (!form || !row || busy) return;
     try {
       validateDeployment(
         form.requires_deployment,
@@ -214,9 +304,21 @@ export function RequestDetail() {
             {row.archived_at && "· 보관됨"}
           </p>
         </div>
-        <span className={`status-pill ${row.status}`}>
-          {statuses[row.status]}
-        </span>
+        <div className="detail-title-actions">
+          <span className={`status-pill ${row.status}`}>
+            {statuses[row.status]}
+          </span>
+          {!demo && (
+            <button
+              ref={editButton}
+              className="primary"
+              disabled={!writable || busy || editing}
+              onClick={() => setEditing(true)}
+            >
+              요청 수정
+            </button>
+          )}
+        </div>
       </div>
       {error && (
         <Alert>
@@ -272,154 +374,242 @@ export function RequestDetail() {
               : "사용 중지 고객사의 요청입니다. 고객사 사용을 재개하면 다시 수정할 수 있습니다."}
         </Alert>
       )}
-      <div className="detail-grid">
-        <div>
-          <form className="form-panel" onSubmit={save}>
-            <h2>요청 및 조치 내용</h2>
-            <fieldset disabled={!writable || busy}>
-              <label>
-                제목
-                <input
-                  required
-                  maxLength={150}
-                  value={form.title}
-                  onChange={(e) => field("title", e.target.value)}
-                />
-              </label>
-              <label>
-                요청 내용
-                <textarea
-                  required
-                  rows={6}
-                  maxLength={10000}
-                  value={form.description}
-                  onChange={(e) => field("description", e.target.value)}
-                />
-              </label>
-              <div className="form-grid">
-                <label>
-                  요청일
-                  <input
-                    type="date"
-                    required
-                    value={form.requested_on}
-                    onChange={(e) => field("requested_on", e.target.value)}
-                  />
-                </label>
-                <label>
-                  고객사 요청자
-                  <input
-                    maxLength={80}
-                    value={form.requester_name || ""}
-                    onChange={(e) => field("requester_name", e.target.value)}
-                  />
-                </label>
-              </div>
-              <label>
-                고객사 전달용 조치 요약
-                <textarea
-                  rows={4}
-                  maxLength={10000}
-                  value={form.action_summary}
-                  onChange={(e) => field("action_summary", e.target.value)}
-                  placeholder="고객사에 전달할 결과를 정리하세요. 내부 메모와 구분됩니다."
-                />
-              </label>
-              <hr />
-              <h2>진행 및 배포</h2>
-              <div className="form-grid">
-                <fieldset className="state-buttons">
-                  <legend>진행 상태</legend>
-                  {Object.entries(statuses).map(([key, label]) => (
-                    <button
-                      type="button"
-                      key={key}
-                      className={key}
-                      aria-pressed={form.status === key}
-                      onClick={() => field("status", key as Status)}
-                    >
-                      <i className={`dot ${key}`} />
-                      {label}
-                    </button>
-                  ))}
+      <div className="detail-grid request-workspace">
+        <section className="detail-summary">
+          <span className="request-context">운영 반영 확인</span>
+          <h2>{deploymentLabel(row)}</h2>
+          <DeploymentRail request={row} />
+          <dl>
+            <div>
+              <dt>테스트 서버</dt>
+              <dd>
+                {row.requires_deployment
+                  ? formatDate(row.test_deployed_at)
+                  : "해당 없음"}
+              </dd>
+            </div>
+            <div>
+              <dt>운영 서버</dt>
+              <dd>
+                {row.requires_deployment
+                  ? formatDate(row.production_deployed_at)
+                  : "해당 없음"}
+              </dd>
+            </div>
+            <div>
+              <dt>최근 수정</dt>
+              <dd>
+                {person(row.updated_by)}
+                <br />
+                {formatDate(row.updated_at, true)}
+              </dd>
+            </div>
+          </dl>
+          <small>완료 처리와 운영 반영 기록은 별개입니다.</small>
+        </section>
+
+        <div className="detail-main">
+          {editing ? (
+            <>
+              <p className="edit-notice" role="status">
+                요청 수정 중입니다. 변경사항은 저장해야 반영됩니다. 활동 기록과
+                첨부 이미지는 별도로 저장됩니다.
+              </p>
+              <form className="form-panel" onSubmit={save}>
+                <h2>요청 및 조치 내용</h2>
+                <fieldset disabled={!writable || busy}>
+                  <label>
+                    제목
+                    <input
+                      ref={titleInput}
+                      required
+                      maxLength={150}
+                      value={form.title}
+                      onChange={(e) => field("title", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    요청 내용
+                    <textarea
+                      required
+                      rows={6}
+                      maxLength={10000}
+                      value={form.description}
+                      onChange={(e) => field("description", e.target.value)}
+                    />
+                  </label>
+                  <div className="form-grid">
+                    <label>
+                      요청일
+                      <input
+                        type="date"
+                        required
+                        value={form.requested_on}
+                        onChange={(e) => field("requested_on", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      고객사 요청자
+                      <input
+                        maxLength={80}
+                        value={form.requester_name || ""}
+                        onChange={(e) =>
+                          field("requester_name", e.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    고객사 전달용 조치 요약
+                    <textarea
+                      rows={4}
+                      maxLength={10000}
+                      value={form.action_summary}
+                      onChange={(e) => field("action_summary", e.target.value)}
+                      placeholder="고객사에 전달할 결과를 정리하세요. 내부 메모와 구분됩니다."
+                    />
+                  </label>
+                  <hr />
+                  <h2>진행 및 배포</h2>
+                  <div className="form-grid">
+                    <fieldset className="state-buttons">
+                      <legend>진행 상태</legend>
+                      {Object.entries(statuses).map(([key, label]) => (
+                        <button
+                          type="button"
+                          key={key}
+                          className={key}
+                          aria-pressed={form.status === key}
+                          onClick={() => field("status", key as Status)}
+                        >
+                          <i className={`dot ${key}`} />
+                          {label}
+                        </button>
+                      ))}
+                    </fieldset>
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked={form.requires_deployment}
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          if (
+                            !checked &&
+                            (form.test_deployed_at ||
+                              form.production_deployed_at) &&
+                            !(await confirm({
+                              title: "배포 불필요로 변경할까요?",
+                              message:
+                                "저장하면 테스트·운영 반영일이 모두 비워집니다. 요청 내용과 조치 기록은 유지됩니다.",
+                              danger: true,
+                              action: "반영일 비우기",
+                            }))
+                          )
+                            return;
+                          setForm((f) =>
+                            f
+                              ? {
+                                  ...f,
+                                  requires_deployment: checked,
+                                  ...(!checked
+                                    ? {
+                                        test_deployed_at: null,
+                                        production_deployed_at: null,
+                                      }
+                                    : {}),
+                                }
+                              : f,
+                          );
+                        }}
+                      />
+                      서버 배포 필요
+                    </label>
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      테스트 반영일 (한국 시간)
+                      <input
+                        type="datetime-local"
+                        disabled={!form.requires_deployment}
+                        value={localDatetime(form.test_deployed_at)}
+                        onChange={(e) =>
+                          field("test_deployed_at", isoKST(e.target.value))
+                        }
+                      />
+                    </label>
+                    <label>
+                      운영 반영일 (한국 시간)
+                      <input
+                        type="datetime-local"
+                        disabled={!form.requires_deployment}
+                        value={localDatetime(form.production_deployed_at)}
+                        onChange={(e) =>
+                          field(
+                            "production_deployed_at",
+                            isoKST(e.target.value),
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                  {form.production_deployed_at && !form.test_deployed_at && (
+                    <p className="hint">
+                      테스트 반영일이 없습니다. 운영에 바로 반영한 요청인지
+                      확인해주세요.
+                    </p>
+                  )}
+                  {writable && (
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void cancelEdit()}
+                      >
+                        수정 취소
+                      </button>
+                      <button className="primary" disabled={busy}>
+                        {busy ? "저장 중…" : "변경사항 저장"}
+                      </button>
+                    </div>
+                  )}
                 </fieldset>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={form.requires_deployment}
-                    onChange={async (e) => {
-                      const checked = e.target.checked;
-                      if (
-                        !checked &&
-                        (form.test_deployed_at ||
-                          form.production_deployed_at) &&
-                        !(await confirm({
-                          title: "배포 불필요로 변경할까요?",
-                          message:
-                            "저장하면 테스트·운영 반영일이 모두 비워집니다. 요청 내용과 조치 기록은 유지됩니다.",
-                          danger: true,
-                          action: "반영일 비우기",
-                        }))
-                      )
-                        return;
-                      setForm((f) =>
-                        f
-                          ? {
-                              ...f,
-                              requires_deployment: checked,
-                              ...(!checked
-                                ? {
-                                    test_deployed_at: null,
-                                    production_deployed_at: null,
-                                  }
-                                : {}),
-                            }
-                          : f,
-                      );
-                    }}
-                  />
-                  서버 배포 필요
-                </label>
-              </div>
-              <div className="form-grid">
-                <label>
-                  테스트 반영일 (한국 시간)
-                  <input
-                    type="datetime-local"
-                    disabled={!form.requires_deployment}
-                    value={localDatetime(form.test_deployed_at)}
-                    onChange={(e) =>
-                      field("test_deployed_at", isoKST(e.target.value))
-                    }
-                  />
-                </label>
-                <label>
-                  운영 반영일 (한국 시간)
-                  <input
-                    type="datetime-local"
-                    disabled={!form.requires_deployment}
-                    value={localDatetime(form.production_deployed_at)}
-                    onChange={(e) =>
-                      field("production_deployed_at", isoKST(e.target.value))
-                    }
-                  />
-                </label>
-              </div>
-              {form.production_deployed_at && !form.test_deployed_at && (
-                <p className="hint">
-                  테스트 반영일이 없습니다. 운영에 바로 반영한 요청인지
-                  확인해주세요.
-                </p>
-              )}
-              {writable && (
-                <div className="form-actions">
-                  <button className="primary" disabled={busy}>
-                    {busy ? "저장 중…" : "변경사항 저장"}
-                  </button>
+              </form>
+            </>
+          ) : (
+            <section
+              className="form-panel request-reading"
+              aria-label="요청 상세 내용"
+            >
+              <dl className="request-facts">
+                <div>
+                  <dt>고객사</dt>
+                  <dd>{customer?.name || "—"}</dd>
                 </div>
-              )}
-            </fieldset>
-          </form>
+                <div>
+                  <dt>요청일</dt>
+                  <dd>{formatDate(row.requested_on)}</dd>
+                </div>
+                <div>
+                  <dt>고객사 요청자</dt>
+                  <dd>{row.requester_name || "등록되지 않음"}</dd>
+                </div>
+                <div>
+                  <dt>작성자</dt>
+                  <dd>{person(row.created_by)}</dd>
+                </div>
+              </dl>
+              <section className="reading-section">
+                <h2>요청 내용</h2>
+                <p className="request-prose">{row.description}</p>
+              </section>
+              <section className="reading-section">
+                <h2>고객사 전달용 조치 요약</h2>
+                <p className="request-prose">
+                  {row.action_summary || "아직 조치 요약이 없습니다."}
+                </p>
+              </section>
+            </section>
+          )}
           <section className="form-panel">
             <h2>
               첨부 이미지{" "}
@@ -471,38 +661,6 @@ export function RequestDetail() {
           </section>
         </div>
         <aside>
-          <section className="detail-summary">
-            <span className="request-context">운영 반영 확인</span>
-            <h2>{deploymentLabel(row)}</h2>
-            <DeploymentRail request={row} />
-            <dl>
-              <div>
-                <dt>테스트 서버</dt>
-                <dd>
-                  {row.requires_deployment
-                    ? formatDate(row.test_deployed_at)
-                    : "해당 없음"}
-                </dd>
-              </div>
-              <div>
-                <dt>운영 서버</dt>
-                <dd>
-                  {row.requires_deployment
-                    ? formatDate(row.production_deployed_at)
-                    : "해당 없음"}
-                </dd>
-              </div>
-              <div>
-                <dt>최근 수정</dt>
-                <dd>
-                  {person(row.updated_by)}
-                  <br />
-                  {formatDate(row.updated_at, true)}
-                </dd>
-              </div>
-            </dl>
-            <small>완료 처리와 운영 반영 기록은 별개입니다.</small>
-          </section>
           <section className="form-panel activity-panel">
             <h2>활동 기록</h2>
             {writable && (
@@ -570,7 +728,7 @@ export function RequestDetail() {
                     title: row.archived_at ? "요청 복원" : "요청 보관",
                     message: row.archived_at
                       ? "요청을 복원할까요?"
-                      : "요청을 보관할까요? 보관 후에는 읽기 전용이 됩니다.",
+                      : `요청을 보관할까요? 보관 후에는 읽기 전용이 됩니다.${dirty ? " 저장하지 않은 요청 수정은 사라집니다." : ""}`,
                     danger: !row.archived_at,
                     action: row.archived_at ? "복원" : "보관",
                   })

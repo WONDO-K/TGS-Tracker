@@ -202,6 +202,7 @@ test("활동 추가가 저장하지 않은 요청 본문을 지우지 않는다"
 }) => {
   await mockLive(page);
   await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
   await page
     .getByRole("heading", { name: "검증할 요청", exact: true })
     .waitFor();
@@ -310,6 +311,7 @@ test("시안의 모바일 상태 탭은 선택한 단계만 보여준다", async
 test("반영일 초기화는 확인 모달에서 취소할 수 있다", async ({ page }) => {
   await mockLive(page);
   await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
   await page.getByLabel("테스트 반영일 (한국 시간)").fill("2026-01-01T10:00");
   await page.getByLabel("서버 배포 필요", { exact: true }).click();
   const dialog = page.getByRole("dialog", {
@@ -369,7 +371,9 @@ test("읽기 전용 데모의 보드·필터·상세·모바일", async ({ page 
       exact: true,
     })
     .click();
-  await expect(page.locator("textarea").first()).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "요청 수정", exact: true }),
+  ).toHaveCount(0);
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -469,6 +473,7 @@ test("저장 충돌에서 입력 복사와 최신 내용 취소로 초안을 보
     }),
   );
   await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
   await page
     .getByRole("textbox", { name: "요청 내용", exact: true })
     .fill("복원할 미저장 내용");
@@ -502,6 +507,7 @@ test("운영 반영 저장은 확인 후 실행하며 취소하면 날짜를 보
     return r.fulfill({ json: row });
   });
   await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
   await page.getByLabel("운영 반영일 (한국 시간)").fill("2026-01-01T15:00");
   await page
     .getByRole("button", { name: "변경사항 저장", exact: true })
@@ -745,7 +751,7 @@ test("보관과 복원은 확인 후 실행하며 보관 중에는 편집을 막
     .getByRole("button", { name: "보관", exact: true })
     .click();
   await expect(
-    page.getByRole("textbox", { name: "제목", exact: true }),
+    page.getByRole("button", { name: "요청 수정", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "요청 복원", exact: true }).click();
   await page
@@ -753,7 +759,7 @@ test("보관과 복원은 확인 후 실행하며 보관 중에는 편집을 막
     .getByRole("button", { name: "복원", exact: true })
     .click();
   await expect(
-    page.getByRole("textbox", { name: "제목", exact: true }),
+    page.getByRole("button", { name: "요청 수정", exact: true }),
   ).toBeEnabled();
 });
 
@@ -763,4 +769,242 @@ test("공개 데모 인증 화면에는 로그인·비밀번호 변경 폼을 �
   await page.goto("http://127.0.0.1:5174/#/login");
   await expect(page.getByText(/읽기 전용 데모에서는 계정/)).toBeVisible();
   await expect(page.locator("form")).toHaveCount(0);
+});
+
+test("상세는 읽기부터 시작하고 수정 취소는 초안을 확인한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await expect(
+    page.getByRole("heading", { name: "요청 내용", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "제목", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "요청 내용", exact: true })
+    .fill("취소하기 전 초안");
+  await page.getByRole("button", { name: "수정 취소", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "수정을 취소할까요?" });
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "요청 내용", exact: true }),
+  ).toHaveValue("취소하기 전 초안");
+  await page.getByRole("button", { name: "수정 취소", exact: true }).click();
+  await dialog.getByRole("button", { name: "수정 취소", exact: true }).click();
+  await expect(page.getByText("원래 요청 내용", { exact: true })).toBeVisible();
+});
+
+test("등록 폼은 2단으로 표시하고 저장 실패 시 입력을 보존한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.route("**/rest/v1/rpc/create_request", (r) =>
+    r.fulfill({ status: 503, json: { message: "요청 저장 실패" } }),
+  );
+  await page.goto("http://127.0.0.1:5175/#/requests/new");
+  await expect(page.locator(".request-create-grid")).toBeVisible();
+  await page.getByRole("textbox", { name: /제목/ }).fill("새 요청 제목");
+  await page.getByRole("textbox", { name: /요청 내용/ }).fill("새 요청 내용");
+  await page.getByRole("button", { name: "요청 등록", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("요청 저장 실패");
+  await expect(page.getByRole("textbox", { name: /제목/ })).toHaveValue(
+    "새 요청 제목",
+  );
+});
+
+test("내 계정은 프로필과 보안을 구분하고 이름 저장 실패를 보존한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.route("**/rest/v1/rpc/update_display_name", (r) =>
+    r.fulfill({ status: 503, json: { message: "이름 저장 실패" } }),
+  );
+  await page.goto("http://127.0.0.1:5175/#/account");
+  await expect(
+    page.getByRole("heading", { name: "보안", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "표시 이름", exact: true })
+    .fill("변경한 이름");
+  await page.getByRole("button", { name: "이름 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("이름 저장 실패");
+  await expect(
+    page.getByRole("textbox", { name: "표시 이름", exact: true }),
+  ).toHaveValue("변경한 이름");
+});
+
+test("수정 저장 성공은 읽기 화면으로 복귀하고 링크 이탈 취소는 초안을 보존한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  let current = { ...row };
+  await page.route("**/rest/v1/requests?*", (r) =>
+    r.fulfill({ json: current }),
+  );
+  await page.route("**/rest/v1/rpc/update_request", (r) => {
+    const body = r.request().postDataJSON();
+    expect(body.expected_version).toBe(1);
+    current = { ...current, ...body.patch, version: 2 };
+    return r.fulfill({ json: current });
+  });
+  await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "요청 내용", exact: true })
+    .fill("저장할 새 내용");
+  await page
+    .getByRole("link", { name: "목록으로 돌아가기", exact: true })
+    .click({ noWaitAfter: true });
+  await page
+    .getByRole("dialog", { name: "수정 중인 화면을 나갈까요?" })
+    .getByRole("button", { name: "취소", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "요청 내용", exact: true }),
+  ).toHaveValue("저장할 새 내용");
+  await page
+    .getByRole("button", { name: "변경사항 저장", exact: true })
+    .click();
+  await expect(page.getByText("저장할 새 내용", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "제목", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "요청 수정", exact: true }),
+  ).toBeEnabled();
+});
+
+test("모바일 등록·읽기·계정 화면은 가로 넘침 없이 배치된다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const route of ["requests/new", "requests/request-one", "account"]) {
+    await page.goto("http://127.0.0.1:5175/#/" + route);
+    await page.locator("main h1").waitFor();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("http://127.0.0.1:5175/#/requests/new");
+  await expect(page.locator(".request-create-grid")).toBeVisible();
+  const left = await page.locator(".request-create-grid>section").boundingBox(),
+    right = await page.locator(".request-create-grid>aside").boundingBox();
+  expect(right!.y).toBeGreaterThan(left!.y + left!.height);
+});
+
+test("등록 고객사가 없으면 입력과 저장을 차단하고 안내한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.route("**/rest/v1/customers?*", (r) => r.fulfill({ json: [] }));
+  await page.goto("http://127.0.0.1:5175/#/requests/new");
+  await expect(page.getByText(/등록 가능한 고객사가 없습니다/)).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /제목/ })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "요청 등록", exact: true }),
+  ).toBeDisabled();
+});
+
+test("브라우저 뒤로가기와 로그아웃도 수정 초안을 확인한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  let signouts = 0;
+  await page.route("**/auth/v1/logout*", (r) => {
+    signouts++;
+    return r.fulfill({ json: {} });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await page.getByRole("link", { name: "검증 요청 1", exact: true }).click();
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "요청 내용", exact: true })
+    .fill("이탈 확인 초안");
+  await page.evaluate(() => history.back());
+  const modal = page.getByRole("dialog", {
+    name: "수정 중인 화면을 나갈까요?",
+  });
+  await modal.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "요청 내용", exact: true }),
+  ).toHaveValue("이탈 확인 초안");
+  await page
+    .locator(".sidebar")
+    .getByRole("button", { name: "로그아웃", exact: true })
+    .click();
+  await modal.getByRole("button", { name: "취소", exact: true }).click();
+  expect(signouts).toBe(0);
+  await page
+    .getByRole("link", { name: "목록으로 돌아가기", exact: true })
+    .click({ noWaitAfter: true });
+  await modal.getByRole("button", { name: "나가기", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "진행 현황", exact: true }),
+  ).toBeVisible();
+});
+
+test("소개 페이지는 공개이며 섹션 이동과 데모 필터가 연결된다", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5174/#/about");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "운영에는 없는",
+  );
+  await page
+    .getByRole("navigation", { name: "소개 페이지 메뉴" })
+    .getByRole("link", { name: "설계 판단", exact: true })
+    .click();
+  await expect(page.locator("#decisions")).toBeInViewport();
+  await page.reload();
+  await expect(page.locator("#decisions")).toBeInViewport();
+  await page
+    .getByRole("link", { name: "운영 미반영 요청 보기", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/board\?deployment=pending$/);
+  await expect(page.locator(".request-card")).toHaveCount(3);
+});
+
+test("데모에서 소개로 왕복하고 모바일에 가로 넘침이 없다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:5174/#/board");
+  await page.getByRole("link", { name: "서비스 소개", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "놓치지 않게",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("link", { name: "데모 열어보기", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "진행 현황", exact: true }),
+  ).toBeVisible();
+});
+
+test("실무 모드의 소개도 로그인 없이 열리며 내부 고객사 API를 호출하지 않는다", async ({
+  page,
+}) => {
+  const dataRequests: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/rest/v1/")) dataRequests.push(r.url());
+  });
+  await page.goto("http://127.0.0.1:5175/#/about");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "운영에는 없는",
+  );
+  await expect(
+    page.getByRole("link", { name: "서비스 로그인", exact: true }).first(),
+  ).toHaveAttribute("href", "#/login");
+  expect(dataRequests).toEqual([]);
 });

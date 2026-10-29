@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-export function Brand() {
+export function Brand({ to = "/board" }: { to?: string }) {
   return (
-    <Link className="brand" to="/board">
+    <Link className="brand" to={to}>
       <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
         <rect width="40" height="40" rx="11" fill="currentColor" />
         <rect x="8" y="9" width="5.5" height="6" rx="2" fill="#7A8599" />
