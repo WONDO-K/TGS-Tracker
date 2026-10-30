@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
+  useDndContext,
 } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
+import type { DragEndEvent, KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { useSession } from "../../app/Session";
 import { listRequests, rpc } from "../../lib/api";
 import {
@@ -24,6 +26,25 @@ import type { ListResult, RequestRow, Status } from "../../lib/types";
 import { Alert, Empty, Loading, PageTitle } from "../../components/UI";
 import { RequestFilters, useFilters } from "./Filters";
 const statusKeys = Object.keys(statuses) as Status[];
+const columnCoordinates: KeyboardCoordinateGetter = (
+  event,
+  { context, currentCoordinates },
+) => {
+  if (!["ArrowLeft", "ArrowRight"].includes(event.code)) return;
+  const index = statusKeys.indexOf(
+    (context.over?.id ||
+      context.active?.data.current?.request.status) as Status,
+  );
+  const next = statusKeys[index + (event.code === "ArrowRight" ? 1 : -1)];
+  const target = context.droppableRects.get(next),
+    from = context.collisionRect;
+  if (!target || !from) return;
+  event.preventDefault();
+  return {
+    x: currentCoordinates.x + target.left - from.left,
+    y: currentCoordinates.y + target.top - from.top,
+  };
+};
 export function Board({ list = false }: { list?: boolean }) {
   const location = useLocation();
   const { customers } = useSession(),
@@ -44,6 +65,36 @@ export function Board({ list = false }: { list?: boolean }) {
     [busy, setBusy] = useState(false);
   const [mobileStatus, setMobileStatus] = useState<Status | null>(null);
   const [moveNotice, setMoveNotice] = useState("");
+  const [dragRequest, setDragRequest] = useState<RequestRow | null>(null);
+  const [desktop, setDesktop] = useState(
+    () => window.matchMedia("(min-width:1001px) and (pointer:fine)").matches,
+  );
+  const suppressClick = useRef(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width:1001px) and (pointer:fine)");
+    const resize = () => setDesktop(media.matches);
+    media.addEventListener("change", resize);
+    return () => media.removeEventListener("change", resize);
+  }, []);
+  useEffect(() => {
+    // 드롭 직후 발생하는 클릭만 막는다. 다음 실제 클릭은 pointerdown에서 다시 허용한다.
+    const reset = () => {
+      suppressClick.current = false;
+    };
+    const prevent = (event: MouseEvent) => {
+      if (suppressClick.current && event.detail !== 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        suppressClick.current = false;
+      }
+    };
+    document.addEventListener("pointerdown", reset, true);
+    document.addEventListener("click", prevent, true);
+    return () => {
+      document.removeEventListener("pointerdown", reset, true);
+      document.removeEventListener("click", prevent, true);
+    };
+  }, []);
   const key = JSON.stringify(filters);
   useEffect(() => {
     setPage(0);
@@ -55,31 +106,38 @@ export function Board({ list = false }: { list?: boolean }) {
       completed: 30,
     });
   }, [key, list]);
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      if (list) setListing(await listRequests(filters, null, 30, page * 30));
-      else {
-        // ponytail: 로딩된 페이지를 새로 조회한다. 큰 보드에서 요청량이 문제가 되면 변경된 열만 갱신한다.
-        const data = await Promise.all(
-          statusKeys.map(async (s) => {
-            const pages = await Promise.all(
-              Array.from({ length: Math.ceil(limits[s] / 30) }, (_, i) =>
-                listRequests(filters, s, 30, i * 30),
-              ),
-            );
-            return { ...pages[0], rows: pages.flatMap((p) => p.rows) };
-          }),
-        );
-        setResults(Object.fromEntries(statusKeys.map((s, i) => [s, data[i]])));
+  const load = useCallback(
+    async (background = false) => {
+      if (!background) setLoading(true);
+      setError("");
+      try {
+        if (list) setListing(await listRequests(filters, null, 30, page * 30));
+        else {
+          // ponytail: 로딩된 페이지를 새로 조회한다. 큰 보드에서 요청량이 문제가 되면 변경된 열만 갱신한다.
+          const data = await Promise.all(
+            statusKeys.map(async (s) => {
+              const pages = await Promise.all(
+                Array.from({ length: Math.ceil(limits[s] / 30) }, (_, i) =>
+                  listRequests(filters, s, 30, i * 30),
+                ),
+              );
+              return { ...pages[0], rows: pages.flatMap((p) => p.rows) };
+            }),
+          );
+          setResults(
+            Object.fromEntries(statusKeys.map((s, i) => [s, data[i]])),
+          );
+        }
+        return true;
+      } catch (e) {
+        setError(errorMessage(e));
+        return false;
+      } finally {
+        if (!background) setLoading(false);
       }
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [key, list, page, limits]);
+    },
+    [key, list, page, limits],
+  );
   useEffect(() => {
     void load();
   }, [load]);
@@ -90,7 +148,14 @@ export function Board({ list = false }: { list?: boolean }) {
     mobileStatus || statusKeys.find((k) => counts?.[k]) || "received";
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, {
+      keyboardCodes: {
+        start: ["Space"],
+        end: ["Space", "Enter", "Tab"],
+        cancel: ["Escape"],
+      },
+      coordinateGetter: columnCoordinates,
+    }),
   );
   async function move(r: RequestRow, status: Status) {
     if (r.status === status || busy) return;
@@ -103,8 +168,12 @@ export function Board({ list = false }: { list?: boolean }) {
         expected_version: r.version,
         patch: { status },
       });
-      await load();
-      setMoveNotice(`${r.title} → ${statuses[status]} 상태로 변경했습니다.`);
+      const refreshed = await load(true);
+      setMoveNotice(
+        refreshed
+          ? `${r.title} → ${statuses[status]} 상태로 변경했습니다.`
+          : `${r.title} 상태는 저장했지만 최신 현황을 불러오지 못했습니다. 다시 불러오기를 눌러 확인해주세요.`,
+      );
     } catch (e) {
       setMoveNotice("");
       setError(errorMessage(e));
@@ -113,6 +182,7 @@ export function Board({ list = false }: { list?: boolean }) {
     }
   }
   async function dropped(e: DragEndEvent) {
+    setDragRequest(null);
     if (!e.over) return;
     const r = e.active.data.current?.request as RequestRow;
     const s = e.over.id as Status;
@@ -315,7 +385,28 @@ export function Board({ list = false }: { list?: boolean }) {
           </div>
         </div>
       ) : (
-        <DndContext sensors={sensors} onDragEnd={(e) => void dropped(e)}>
+        <DndContext
+          sensors={sensors}
+          onDragStart={(e) => {
+            setDragRequest(e.active.data.current?.request || null);
+            suppressClick.current = e.activatorEvent.type === "pointerdown";
+          }}
+          onDragCancel={() => setDragRequest(null)}
+          onDragEnd={(e) => void dropped(e)}
+          accessibility={{
+            screenReaderInstructions: {
+              draggable:
+                "Enter로 요청 상세를 엽니다. Space로 카드를 잡고 좌우 방향키로 상태를 선택한 뒤 Space로 놓으세요. Escape로 취소합니다. 상태 선택창으로도 변경할 수 있습니다.",
+            },
+          }}
+        >
+          {!demo && (
+            <p className="board-drag-help">
+              {desktop
+                ? "카드를 잡아 다른 열로 옮기세요. 클릭하면 상세가 열립니다."
+                : "카드의 상태 선택으로 진행 단계를 변경할 수 있습니다."}
+            </p>
+          )}
           <div
             className="mobile-stage-tabs"
             role="tablist"
@@ -364,9 +455,24 @@ export function Board({ list = false }: { list?: boolean }) {
                 more={() => setLimits((v) => ({ ...v, [s]: v[s] + 30 }))}
                 move={move}
                 busy={busy}
+                desktop={desktop}
               />
             ))}
           </div>
+          <DragOverlay dropAnimation={null}>
+            {dragRequest && (
+              <article
+                className="request-card card-drag-preview"
+                aria-hidden="true"
+              >
+                <div className="card-top">
+                  <small>#{dragRequest.number}</small>
+                </div>
+                <strong className="card-title">{dragRequest.title}</strong>
+                <DeploymentRail request={dragRequest} />
+              </article>
+            )}
+          </DragOverlay>
         </DndContext>
       )}
       <div className="board-footer">
@@ -386,6 +492,7 @@ function Column({
   more,
   move,
   busy,
+  desktop,
 }: {
   status: Status;
   active: boolean;
@@ -393,10 +500,14 @@ function Column({
   more: () => void;
   move: (r: RequestRow, s: Status) => Promise<void>;
   busy: boolean;
+  desktop: boolean;
 }) {
+  const { active: dragActive } = useDndContext();
+  const changing =
+    !!dragActive && dragActive.data.current?.request.status !== status;
   const { setNodeRef, isOver } = useDroppable({
     id: status,
-    disabled: demo || busy,
+    disabled: demo || busy || !desktop,
   });
   return (
     <section
@@ -414,10 +525,21 @@ function Column({
       </header>
       <div className="column-body">
         {result?.rows.map((r) => (
-          <RequestCard key={r.id} request={r} move={move} busy={busy} />
+          <RequestCard
+            key={r.id}
+            request={r}
+            move={move}
+            busy={busy}
+            desktop={desktop}
+          />
         ))}
         {!result?.rows.length && (
           <div className="column-empty">아직 요청이 없습니다</div>
+        )}
+        {isOver && changing && (
+          <div className="drop-placeholder" role="status">
+            놓으면 {statuses[status]} 상태로 변경
+          </div>
         )}
         {(result?.rows.length || 0) < (result?.total || 0) && (
           <button className="wide quiet" onClick={more}>
@@ -432,50 +554,55 @@ function RequestCard({
   request: r,
   move,
   busy,
+  desktop,
 }: {
   request: RequestRow;
   move: (r: RequestRow, s: Status) => Promise<void>;
   busy: boolean;
+  desktop: boolean;
 }) {
   const location = useLocation();
   const { customers, people } = useSession();
   const writable =
     !demo &&
-    !busy &&
     !r.archived_at &&
     !!customers.find((c) => c.id === r.customer_id)?.is_active;
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: r.id, data: { request: r }, disabled: !writable });
+  const draggable = writable && !busy && desktop;
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } =
+    useDraggable({ id: r.id, data: { request: r }, disabled: !draggable });
   return (
     <article
       ref={setNodeRef}
       className={`request-card ${isDragging ? "dragging" : ""}`}
-      style={{
-        transform: transform
-          ? `translate3d(${transform.x}px,${transform.y}px,0)`
-          : undefined,
+      data-draggable={draggable}
+      onPointerDown={(e) => {
+        if (
+          !draggable ||
+          e.pointerType !== "mouse" ||
+          (e.target as Element).closest("select,option,input,textarea,button")
+        )
+          return;
+        listeners?.onPointerDown?.(e);
       }}
     >
       <div className="card-top">
         <span className="customer-tag">
           {customers.find((c) => c.id === r.customer_id)?.name}
         </span>
-        {writable ? (
-          <button
-            className="drag-handle"
-            {...listeners}
-            {...attributes}
-            aria-label={`${r.title} 카드 이동`}
-          >
-            ⠿
-          </button>
-        ) : (
-          <small>#{r.number}</small>
-        )}
+        <small>#{r.number}</small>
       </div>
       <Link
         to={`/requests/${r.id}`}
         className="card-title"
+        ref={setActivatorNodeRef}
+        draggable={false}
+        aria-describedby={
+          draggable ? attributes["aria-describedby"] : undefined
+        }
+        aria-roledescription={draggable ? "이동 가능한 요청" : undefined}
+        onKeyDown={(e) => {
+          if (draggable) listeners?.onKeyDown?.(e);
+        }}
         state={{ returnTo: location.pathname + location.search }}
       >
         {r.title}
@@ -498,6 +625,7 @@ function RequestCard({
       {writable && (
         <select
           className="card-status"
+          disabled={busy}
           aria-label={`${r.title} 진행 상태`}
           value={r.status}
           onChange={(e) => void move(r, e.target.value as Status)}

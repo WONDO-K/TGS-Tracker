@@ -566,10 +566,11 @@ for (const fails of [false, true])
       }
     });
     await page.goto("http://127.0.0.1:5175/#/board");
-    const handle = page.getByRole("button", { name: "검증할 요청 카드 이동" });
+    const handle = page.locator("#lane-received .request-card .card-meta");
     await expect(handle).toBeVisible();
     const from = await handle.boundingBox(),
       to = await page.locator("#lane-in_progress").boundingBox();
+    expect(to!.height).toBeGreaterThanOrEqual(360);
     await page.mouse.move(
       from!.x + from!.width / 2,
       from!.y + from!.height / 2,
@@ -581,8 +582,13 @@ for (const fails of [false, true])
       { steps: 3 },
     );
     await page.mouse.move(to!.x + to!.width / 2, to!.y + 30, { steps: 15 });
+    await expect(page.locator(".card-drag-preview")).toBeVisible();
+    await expect(
+      page.locator("#lane-in_progress .drop-placeholder"),
+    ).toBeVisible();
     await page.mouse.up();
     await expect.poll(() => writes).toBe(1);
+    await expect(page).toHaveURL(/#\/board$/);
     if (fails) {
       await expect(page.getByRole("alert")).toContainText("다른 사용자가");
       await expect(page.locator("#lane-received .request-card")).toHaveCount(1);
@@ -594,6 +600,69 @@ for (const fails of [false, true])
         "진행 중 상태로 변경",
       );
     }
+  });
+
+for (const refreshFails of [false, true])
+  test(`상태 저장 후 백그라운드 재조회 ${refreshFails ? "실패를 구분한다" : "동안 보드를 유지한다"}`, async ({
+    page,
+  }) => {
+    await mockLive(page);
+    let saved = false,
+      reads = 0;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/rest/v1/rpc/update_request", async (route) => {
+      saved = true;
+      await route.fulfill({ json: null });
+    });
+    await page.route("**/rest/v1/rpc/list_requests", async (route) => {
+      const status = saved ? "in_progress" : "received";
+      if (saved) {
+        reads++;
+        await pending;
+      }
+      if (saved && refreshFails) {
+        await route.fulfill({
+          status: 500,
+          json: { message: "재조회 연결 실패" },
+        });
+        return;
+      }
+      const rows =
+        route.request().postDataJSON().status_filter === status
+          ? [{ ...row, status, version: saved ? 2 : 1 }]
+          : [];
+      await route.fulfill({
+        json: { rows, total: rows.length, counts: { [status]: 1 }, pending: 0 },
+      });
+    });
+    await page.goto("http://127.0.0.1:5175/#/board");
+    const card = await page.locator(".request-card").elementHandle();
+    await page.locator(".card-status").selectOption("in_progress");
+    await expect.poll(() => reads).toBe(4);
+    try {
+      await expect(page.locator(".kanban")).toBeVisible();
+      expect(await card!.evaluate((node) => node.isConnected)).toBe(true);
+      await expect(page.locator(".card-status")).toBeDisabled();
+    } finally {
+      release();
+    }
+    if (refreshFails) {
+      await expect(page.getByRole("alert")).toContainText("재조회 연결 실패");
+      await expect(page.locator(".alert[role=status]")).toContainText(
+        "저장했지만",
+      );
+      await expect(page.locator("#lane-received .request-card")).toHaveCount(1);
+    } else {
+      await expect(page.locator("#lane-in_progress .request-card")).toHaveCount(
+        1,
+      );
+      await expect(page.locator("#lane-in_progress header b")).toHaveText("1");
+      await expect(page.locator("#lane-received header b")).toHaveText("0");
+    }
+    await expect(page.locator(".card-status")).toBeEnabled();
   });
 
 test("초대 만료는 인증 폼 대신 복구 안내를 제공하고 URL에서 오류를 정리한다", async ({
@@ -1007,4 +1076,128 @@ test("실무 모드의 소개도 로그인 없이 열리며 내부 고객사 API
     page.getByRole("link", { name: "서비스 로그인", exact: true }).first(),
   ).toHaveAttribute("href", "#/login");
   expect(dataRequests).toEqual([]);
+});
+
+test("카드 빈 영역 클릭과 제목 Enter는 상세를 연다", async ({ page }) => {
+  await mockLive(page);
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await page
+    .locator(".request-card")
+    .first()
+    .click({ position: { x: 8, y: 8 } });
+  await expect(
+    page.getByRole("heading", { name: "검증할 요청", exact: true }),
+  ).toBeVisible();
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await page.getByRole("link", { name: "검증 요청 1", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "검증할 요청", exact: true }),
+  ).toBeVisible();
+});
+
+test("카드의 상태 선택은 드래그와 상세 열기를 실행하지 않는다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  let writes = 0;
+  await page.route("**/rest/v1/rpc/update_request", (r) => {
+    writes++;
+    expect(r.request().postDataJSON().patch).toEqual({
+      status: "verification",
+    });
+    return r.fulfill({ json: null });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await page
+    .getByRole("combobox", { name: "검증 요청 1 진행 상태", exact: true })
+    .selectOption("verification");
+  await expect.poll(() => writes).toBe(1);
+  await expect(page).toHaveURL(/#\/board$/);
+  await expect(page.locator(".card-drag-preview")).toHaveCount(0);
+});
+
+test("키보드 Space와 방향키로 상태를 이동하고 Escape로 취소한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  let writes = 0;
+  await page.route("**/rest/v1/rpc/update_request", (r) => {
+    writes++;
+    expect(r.request().postDataJSON().patch.status).toBe("in_progress");
+    return r.fulfill({ json: null });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  const title = page.getByRole("link", { name: "검증 요청 1", exact: true });
+  await title.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".card-drag-preview")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.locator("#lane-in_progress .drop-placeholder"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".card-drag-preview")).toHaveCount(0);
+  expect(writes).toBe(0);
+  await title.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".card-drag-preview")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.locator("#lane-in_progress .drop-placeholder"),
+  ).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect.poll(() => writes).toBe(1);
+  await expect(page).toHaveURL(/#\/board$/);
+});
+
+test("포인터 드래그를 취소한 뒤 첫 정상 클릭은 상세를 연다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  let writes = 0;
+  await page.route("**/rest/v1/rpc/update_request", (r) => {
+    writes++;
+    return r.fulfill({ json: null });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  const card = page.locator(".request-card").first();
+  const box = await card.boundingBox();
+  await page.mouse.move(box!.x + 20, box!.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 45, box!.y + 35, { steps: 5 });
+  await expect(page.locator(".card-drag-preview")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page).toHaveURL(/#\/board$/);
+  expect(writes).toBe(0);
+  await card.click({ position: { x: 8, y: 8 } });
+  await expect(
+    page.getByRole("heading", { name: "검증할 요청", exact: true }),
+  ).toBeVisible();
+});
+
+test("모바일은 드래그 없이 상태를 선택하고 데모는 계속 읽기 전용이다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  let writes = 0;
+  await page.route("**/rest/v1/rpc/update_request", (r) => {
+    writes++;
+    return r.fulfill({ json: null });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(page.locator(".request-card[data-draggable=true]")).toHaveCount(
+    0,
+  );
+  await page
+    .getByRole("combobox", { name: "검증 요청 1 진행 상태", exact: true })
+    .selectOption("completed");
+  await expect.poll(() => writes).toBe(1);
+  await page.goto("http://127.0.0.1:5174/#/board");
+  await expect(page.locator(".request-card[data-draggable=true]")).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".card-status")).toHaveCount(0);
 });

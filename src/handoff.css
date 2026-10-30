@@ -1363,25 +1363,65 @@ h2 {
   }
 }
 
-/* 드래그 손잡이는 스크롤·링크 클릭과 분리한다. */
-.drag-handle {
-  min-width: 44px;
-  min-height: 44px;
-  touch-action: none;
+/* 카드 전체 링크와 드래그 영역을 공유하고 상태 선택은 위에 둔다. */
+.board-drag-help {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+.request-card .card-title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.request-card[data-draggable="true"],
+.request-card[data-draggable="true"] .card-title {
   cursor: grab;
 }
-.drag-handle:active {
-  cursor: grabbing;
+.request-card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.request-card .card-status {
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
 }
 .request-card.dragging {
+  opacity: 0.35;
+  outline: 2px dashed var(--control);
+  box-shadow: none;
+}
+.card-drag-preview {
+  height: 100%;
+  min-height: 150px;
+  margin: 0;
+  cursor: grabbing;
   box-shadow: 0 12px 28px rgba(20, 23, 31, 0.16);
+}
+.card-drag-preview .card-title {
+  display: block;
 }
 .kanban-column.over {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-@media (max-width: 1000px) {
-  .drag-handle {
-    display: none;
+.drop-placeholder {
+  padding: 24px 12px;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--accent);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.8;
+  margin-top: 12px;
+}
+@media (min-width: 1001px) {
+  .kanban-column {
+    min-height: 360px;
   }
 }
