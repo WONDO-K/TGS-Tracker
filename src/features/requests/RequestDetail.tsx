@@ -693,7 +693,12 @@ export function RequestDetail() {
                 </button>
               </form>
             )}
-            <div className="timeline">
+            <div
+              className="timeline"
+              role="region"
+              aria-label="활동 기록 목록"
+              tabIndex={activities.length ? 0 : undefined}
+            >
               {activities.map((a) => (
                 <article key={a.id}>
                   <span className={`activity-kind ${a.kind}`}>

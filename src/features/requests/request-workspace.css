@@ -27,6 +27,17 @@
 .request-workspace > aside {
   grid-area: activity;
 }
+.request-workspace .timeline {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--control) transparent;
+}
+.request-workspace .timeline:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
 .request-create .form-panel {
   margin: 0 0 24px;
 }
