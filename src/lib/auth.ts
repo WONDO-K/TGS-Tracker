@@ -1,5 +1,6 @@
 import { parseAuthCallback } from "./domain";
 import { client } from "./supabase";
+import { recordSessionActivity, withSessionLock } from "./idleSession";
 export async function handleAuthCallback() {
   const value = parseAuthCallback(window.location.href);
   if (value.kind === "none") return;
@@ -12,14 +13,20 @@ export async function handleAuthCallback() {
   // 토큰을 교환하기 전에 주소에서 제거해 브라우저 기록과 화면 링크에 남기지 않는다.
   clean();
   const auth = client().auth;
-  const result =
-    value.kind === "otp"
-      ? await auth.verifyOtp({ token_hash: value.token_hash, type: value.type })
-      : value.kind === "code"
-        ? await auth.exchangeCodeForSession(value.code)
-        : await auth.setSession({
-            access_token: value.access_token,
-            refresh_token: value.refresh_token,
-          });
-  if (result.error) throw result.error;
+  await withSessionLock(async () => {
+    const result =
+      value.kind === "otp"
+        ? await auth.verifyOtp({
+            token_hash: value.token_hash,
+            type: value.type,
+          })
+        : value.kind === "code"
+          ? await auth.exchangeCodeForSession(value.code)
+          : await auth.setSession({
+              access_token: value.access_token,
+              refresh_token: value.refresh_token,
+            });
+    if (result.error) throw result.error;
+    if (result.data.user) recordSessionActivity(result.data.user.id);
+  });
 }

@@ -5,6 +5,7 @@ import { client, callbackUrl, demo } from "../../lib/supabase";
 import { errorMessage } from "../../lib/domain";
 import { Alert } from "../../components/UI";
 import { useSession } from "../../app/Session";
+import { recordSessionActivity, withSessionLock } from "../../lib/idleSession";
 import "./auth.css";
 
 export function AuthPage({
@@ -25,7 +26,7 @@ export function AuthPage({
     [message, setMessage] = useState(""),
     [fields, setFields] = useState<Record<string, string>>({});
   const navigate = useNavigate(),
-    { reload } = useSession();
+    { reload, sessionExpired, endingSession } = useSession();
   const linkError = mode !== "reset" && Boolean(initialError);
   useEffect(() => {
     setFields({});
@@ -37,7 +38,7 @@ export function AuthPage({
   }, [mode]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (busy || demo) return;
+    if (busy || demo || endingSession) return;
     setError("");
     setMessage("");
     const invalid: Record<string, string> = {};
@@ -80,9 +81,14 @@ export function AuthPage({
           "비밀번호가 저장되었습니다. 이제 TGS Tracker를 이용할 수 있습니다.",
         );
       } else {
-        const { error } = await auth.signInWithPassword({
-          email: email.trim(),
-          password,
+        const { error } = await withSessionLock(async () => {
+          const result = await auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+          if (!result.error && result.data.user)
+            recordSessionActivity(result.data.user.id);
+          return result;
         });
         if (error) throw error;
         await reload();
@@ -177,6 +183,12 @@ export function AuthPage({
           </div>
         ) : (
           <>
+            {sessionExpired && mode === "login" && (
+              <Alert tone="info">
+                30분 동안 활동이 없어 자동 로그아웃되었습니다. 다시
+                로그인해주세요.
+              </Alert>
+            )}
             {error && <Alert>{error}</Alert>}
             {message && <Alert tone="success">{message}</Alert>}
             {message ? (
@@ -328,14 +340,19 @@ export function AuthPage({
                       비밀번호 재설정
                     </Link>
                   )}
-                  <button className="primary wide" disabled={busy}>
-                    {busy
-                      ? "처리 중…"
-                      : mode === "login"
-                        ? "로그인"
-                        : mode === "reset"
-                          ? "재설정 메일 보내기"
-                          : "비밀번호 저장"}
+                  <button
+                    className="primary wide"
+                    disabled={busy || endingSession}
+                  >
+                    {endingSession
+                      ? "로그아웃 처리 중…"
+                      : busy
+                        ? "처리 중…"
+                        : mode === "login"
+                          ? "로그인"
+                          : mode === "reset"
+                            ? "재설정 메일 보내기"
+                            : "비밀번호 저장"}
                   </button>
                 </form>
                 {mode !== "login" && (

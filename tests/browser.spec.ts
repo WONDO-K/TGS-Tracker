@@ -197,6 +197,154 @@ async function mockLive(page: Page, admin = false) {
     });
   });
 }
+test("30분 미사용 시 자동 로그아웃하고 이유를 안내한다", async ({ page }) => {
+  await mockLive(page);
+  await page.clock.install();
+  let signouts = 0;
+  let finishLogout!: () => void;
+  const logoutPending = new Promise<void>((resolve) => {
+    finishLogout = resolve;
+  });
+  await page.route("**/auth/v1/logout*", async (route) => {
+    signouts++;
+    await logoutPending;
+    await route.fulfill({ status: 204 });
+  });
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(
+    page.getByRole("heading", { name: "진행 현황", exact: true }),
+  ).toBeVisible();
+  await page.clock.fastForward(30 * 60 * 1000);
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole("status")).toContainText("30분 동안 활동이 없어");
+  await expect.poll(() => signouts).toBe(1);
+  try {
+    await expect(
+      page.locator('button[type="submit"],form button.primary').last(),
+    ).toBeDisabled();
+  } finally {
+    finishLogout();
+  }
+  await expect(
+    page.getByRole("button", { name: "로그인", exact: true }),
+  ).toBeEnabled();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("sb-test-project-auth-token"),
+    ),
+  ).toBeNull();
+  await page.route("**/auth/v1/token*", (route) =>
+    route.fulfill({
+      json: {
+        access_token:
+          "eyJhbGciOiJIUzI1NiJ9." +
+          Buffer.from(
+            JSON.stringify({
+              sub: user.id,
+              role: "authenticated",
+              exp: Math.floor(Date.now() / 1000) + 7200,
+            }),
+          ).toString("base64url") +
+          ".test",
+        refresh_token: "new-refresh",
+        expires_in: 3600,
+        token_type: "bearer",
+        user,
+      },
+    }),
+  );
+  await page.getByLabel("이메일", { exact: true }).fill("user@test.local");
+  await page.getByLabel("비밀번호", { exact: true }).fill("test-password");
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page.locator(".kanban")).toBeVisible();
+});
+
+test("사용자 활동은 만료를 연장하고 자동 조회는 연장하지 않는다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.clock.install();
+  await page.route("**/auth/v1/logout*", (r) => r.fulfill({ status: 204 }));
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(page.locator(".kanban")).toBeVisible();
+  await page.clock.fastForward(20 * 60 * 1000);
+  await page.mouse.click(1100, 100);
+  await page.clock.fastForward(20 * 60 * 1000);
+  await expect(page.locator(".kanban")).toBeVisible();
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await page.clock.fastForward(10 * 60 * 1000);
+  await expect(page).toHaveURL(/#\/login$/);
+});
+
+test("오래된 세션으로 재접속하면 화면을 열지 않고 로그아웃한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.addInitScript(
+    (id) =>
+      localStorage.setItem(
+        `tgs-tracker:last-activity:${id}`,
+        String(Date.now() - 31 * 60 * 1000),
+      ),
+    user.id,
+  );
+  await page.route("**/auth/v1/logout*", (r) => r.fulfill({ status: 204 }));
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole("status")).toContainText("30분 동안 활동이 없어");
+  await expect(page.locator(".kanban")).toHaveCount(0);
+});
+
+test("다른 탭의 사용자 활동으로 유휴 시간이 연장된다", async ({ page }) => {
+  await mockLive(page);
+  await page.clock.install();
+  await page.route("**/auth/v1/logout*", (r) => r.fulfill({ status: 204 }));
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(page.locator(".kanban")).toBeVisible();
+  await page.clock.fastForward(20 * 60 * 1000);
+  await page.evaluate((id) => {
+    const key = `tgs-tracker:last-activity:${id}`;
+    localStorage.setItem(key, String(Date.now()));
+    window.dispatchEvent(
+      new StorageEvent("storage", { key, newValue: String(Date.now()) }),
+    );
+  }, user.id);
+  await page.clock.fastForward(20 * 60 * 1000);
+  await expect(page.locator(".kanban")).toBeVisible();
+  await page.clock.fastForward(10 * 60 * 1000);
+  await expect(page).toHaveURL(/#\/login$/);
+});
+
+test("비활성 화면 복귀 시 만료된 세션을 활동으로 되살리지 않는다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.clock.install();
+  await page.route("**/auth/v1/logout*", (r) => r.fulfill({ status: 204 }));
+  await page.goto("http://127.0.0.1:5175/#/board");
+  await expect(page.locator(".kanban")).toBeVisible();
+  await page.clock.setSystemTime(new Date(Date.now() + 31 * 60 * 1000));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page).toHaveURL(/#\/login$/);
+});
+
+test("수정 중에도 유휴 만료는 확인창 없이 업무 화면을 닫는다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.clock.install();
+  await page.route("**/auth/v1/logout*", (r) => r.fulfill({ status: 204 }));
+  await page.goto("http://127.0.0.1:5175/#/requests/request-one");
+  await page.getByRole("button", { name: "요청 수정", exact: true }).click();
+  await page.locator("textarea").first().fill("저장하지 않은 내용");
+  await page.clock.fastForward(30 * 60 * 1000);
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("30분 동안 활동이 없어");
+});
+
 test("활동 추가가 저장하지 않은 요청 본문을 지우지 않는다", async ({
   page,
 }) => {
