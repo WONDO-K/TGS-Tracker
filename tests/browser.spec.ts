@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { unzipSync, strFromU8 } from "fflate";
 const user = {
   id: "00000000-0000-0000-0000-000000000001",
   aud: "authenticated",
@@ -343,6 +345,141 @@ test("수정 중에도 유휴 만료는 확인창 없이 업무 화면을 닫는
   await expect(page).toHaveURL(/#\/login$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("30분 동안 활동이 없어");
+});
+
+test("현재 필터의 전체 205건을 실제 엑셀 파일로 다운로드한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  const offsets: number[] = [];
+  const all = Array.from({ length: 205 }, (_, i) => ({
+    ...row,
+    id: `export-${i}`,
+    number: i + 1,
+    title: `엑셀 요청 ${i + 1}`,
+  }));
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/rest/v1/rpc/list_requests", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.limit_count === 100) {
+      expect(body.status_filter).toBeNull();
+      expect(body.filters).toMatchObject({
+        customer: "customer-one",
+        search: "엑셀",
+        deployment: "pending",
+      });
+      offsets.push(body.offset_count);
+      await pending;
+    }
+    await route.fulfill({
+      json: {
+        rows: all.slice(
+          body.offset_count,
+          body.offset_count + body.limit_count,
+        ),
+        total: all.length,
+        counts: { received: all.length },
+        pending: all.length,
+      },
+    });
+  });
+  await page.goto(
+    "http://127.0.0.1:5175/#/requests?customer=customer-one&search=엑셀&deployment=pending",
+  );
+  const button = page.getByRole("button", {
+    name: "엑셀 다운로드",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  const file = page.waitForEvent("download");
+  await button.click();
+  try {
+    await expect(
+      page.getByRole("button", { name: "엑셀 준비 중…", exact: true }),
+    ).toBeDisabled();
+  } finally {
+    release();
+  }
+  const download = await file;
+  expect(download.suggestedFilename()).toMatch(
+    /^TGS-Tracker_요청현황_\d{8}_\d{4}\.xlsx$/,
+  );
+  const zip = unzipSync(await readFile((await download.path())!));
+  const sheet = strFromU8(zip["xl/worksheets/sheet1.xml"]);
+  expect(sheet.match(/<row /g)).toHaveLength(206);
+  expect(sheet).toContain('autoFilter ref="A1:Q206"');
+  expect(strFromU8(zip["xl/sharedStrings.xml"])).toContain("테스트 반영");
+  expect(strFromU8(zip["xl/sharedStrings.xml"])).toContain("운영 반영");
+  expect(strFromU8(zip["xl/sharedStrings.xml"])).toContain("엑셀 요청 205");
+  expect(strFromU8(zip["xl/workbook.xml"])).toContain("추출 조건");
+  expect(offsets).toEqual([0, 100, 200]);
+  await expect(page.getByRole("status")).toContainText("205건의 엑셀 다운로드");
+});
+
+for (const empty of [true, false])
+  test(`엑셀 ${empty ? "빈 결과" : "조회 실패"} 시 파일을 다운로드하지 않는다`, async ({
+    page,
+  }) => {
+    await mockLive(page);
+    await page.route("**/rest/v1/rpc/list_requests", async (route) => {
+      if (!empty && route.request().postDataJSON().limit_count === 100) {
+        await route.fulfill({
+          status: 403,
+          json: { message: "접근 권한이 변경되었습니다." },
+        });
+      } else
+        await route.fulfill({
+          json: {
+            rows: empty ? [] : [row],
+            total: empty ? 0 : 1,
+            counts: {},
+            pending: 0,
+          },
+        });
+    });
+    let downloads = 0;
+    page.on("download", () => downloads++);
+    await page.goto("http://127.0.0.1:5175/#/requests");
+    const button = page.getByRole("button", {
+      name: "엑셀 다운로드",
+      exact: true,
+    });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await expect(page.getByRole(empty ? "status" : "alert")).toContainText(
+      empty ? "요청이 없어" : "접근 권한이 변경",
+    );
+    expect(downloads).toBe(0);
+    await expect(button).toBeEnabled();
+  });
+
+test("모바일 데모에서 가상 데이터 엑셀을 내려받고 툴바가 넘치지 않는다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:5174/#/board");
+  const button = page.getByRole("button", {
+    name: "엑셀 다운로드",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    button.click(),
+  ]);
+  expect(download.suggestedFilename()).toContain("데모_");
+  const zip = unzipSync(await readFile((await download.path())!));
+  expect(strFromU8(zip["xl/sharedStrings.xml"])).toContain(
+    "가상 데이터 · 읽기 전용 데모",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("활동 추가가 저장하지 않은 요청 본문을 지우지 않는다", async ({

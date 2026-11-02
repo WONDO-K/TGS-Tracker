@@ -387,6 +387,18 @@ h2 {
 }
 .workspace-toolbar {
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  column-gap: 16px;
+  row-gap: 8px;
+}
+.workspace-toolbar > .workspace-actions {
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+.workspace-actions .export-button {
+  min-height: 44px;
+  white-space: nowrap;
 }
 .view-tab {
   font-weight: 500;

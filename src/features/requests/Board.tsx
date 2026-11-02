@@ -25,6 +25,7 @@ import { DeploymentRail } from "../../components/DeploymentRail";
 import type { ListResult, RequestRow, Status } from "../../lib/types";
 import { Alert, Empty, Loading, PageTitle } from "../../components/UI";
 import { RequestFilters, useFilters } from "./Filters";
+import { ExportRequests } from "./ExportRequests";
 const statusKeys = Object.keys(statuses) as Status[];
 const columnCoordinates: KeyboardCoordinateGetter = (
   event,
@@ -65,6 +66,10 @@ export function Board({ list = false }: { list?: boolean }) {
     [busy, setBusy] = useState(false);
   const [mobileStatus, setMobileStatus] = useState<Status | null>(null);
   const [moveNotice, setMoveNotice] = useState("");
+  const [exportNotice, setExportNotice] = useState({
+    message: "",
+    error: false,
+  });
   const [dragRequest, setDragRequest] = useState<RequestRow | null>(null);
   const [desktop, setDesktop] = useState(
     () => window.matchMedia("(min-width:1001px) and (pointer:fine)").matches,
@@ -281,15 +286,29 @@ export function Board({ list = false }: { list?: boolean }) {
             목록
           </Link>
         </div>
-        <button
-          className="quiet"
-          onClick={() => void load()}
-          disabled={loading || busy}
-        >
-          {loading ? "불러오는 중" : "새로고침"}
-        </button>
+        <div className="workspace-actions">
+          <ExportRequests
+            filters={filters}
+            disabled={loading || busy}
+            notify={(message, error = false) =>
+              setExportNotice({ message, error })
+            }
+          />
+          <button
+            className="quiet"
+            onClick={() => void load()}
+            disabled={loading || busy}
+          >
+            {loading ? "불러오는 중" : "새로고침"}
+          </button>
+        </div>
       </div>
       <RequestFilters filters={filters} change={change} />
+      {exportNotice.message && (
+        <Alert tone={exportNotice.error ? "error" : "info"}>
+          {exportNotice.message}
+        </Alert>
+      )}
       {filters.archived && (
         <Alert tone="info">
           보관된 요청은 읽기 전용입니다. 상세 화면에서 내용을 확인하고 복원할 수
