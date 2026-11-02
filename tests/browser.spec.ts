@@ -482,6 +482,175 @@ test("모바일 데모에서 가상 데이터 엑셀을 내려받고 툴바가 �
   ).toBe(true);
 });
 
+test("커밋 대조 미리보기에서 저장소 조건과 결과 필터를 확인한다", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5174/#/commits");
+  await expect(
+    page.getByRole("heading", { name: "커밋 대조", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("UI 미리보기 · 가상 데이터", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^대응 미확인/ }).click();
+  await expect(page.locator(".commit-row")).toHaveCount(2);
+  await page.getByRole("button", { name: /^전체 \d/ }).click();
+  await page.getByLabel("커밋 검색").fill("로그인");
+  await expect(page.locator(".commit-row")).toHaveCount(1);
+  await page.getByLabel("커밋 검색").fill("");
+  await page.getByLabel("저장소", { exact: true }).selectOption("api");
+  await expect(
+    page.getByText("비교 조건이 변경되었습니다.", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "대조하기", exact: true }).click();
+  await expect(
+    page.getByText("API 응답의 날짜 형식 통일", { exact: true }),
+  ).toBeVisible();
+});
+
+test("커밋 근거 패널에서 가상 대응 연결과 해제 후 목록으로 돌아온다", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5174/#/commits");
+  await page.getByRole("button", { name: /^대응 미확인/ }).click();
+  await page
+    .getByRole("button", { name: "검색 조건 초기화 동작 수정", exact: true })
+    .click();
+  const panel = page.getByRole("region", { name: "커밋 상세" });
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "변경 파일", exact: true }).click();
+  await expect(
+    panel.getByText("src/features/search/SearchForm.tsx", { exact: true }),
+  ).toBeVisible();
+  await panel.getByRole("button", { name: "대응 근거", exact: true }).click();
+  await panel.getByLabel("대응 커밋 선택").selectOption("e51a02b");
+  await panel
+    .getByRole("button", { name: "가상 대응 연결", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "연결", exact: true })
+    .click();
+  await expect(panel.getByText("수동 연결", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(page.getByLabel("커밋 검색")).toBeFocused();
+  await page
+    .getByLabel("비교 대상 브랜치", { exact: true })
+    .selectOption("release");
+  await page.getByRole("button", { name: "대조하기", exact: true }).click();
+  await page
+    .getByRole("button", { name: "검색 조건 초기화 동작 수정", exact: true })
+    .click();
+  await expect(panel.getByText("수동 연결", { exact: true })).toHaveCount(0);
+  await expect(panel.getByText("대응 미확인", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "닫기", exact: true }).click();
+  await page
+    .getByLabel("비교 대상 브랜치", { exact: true })
+    .selectOption("main");
+  await page.getByRole("button", { name: "대조하기", exact: true }).click();
+  await page
+    .getByRole("button", { name: "검색 조건 초기화 동작 수정", exact: true })
+    .click();
+  await expect(panel.getByText("수동 연결", { exact: true })).toBeVisible();
+  await panel
+    .getByRole("button", { name: "가상 연결 해제", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "해제", exact: true })
+    .click();
+  await expect(panel.getByText("대응 미확인", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: "검색 조건 초기화 동작 수정",
+      exact: true,
+    }),
+  ).toBeFocused();
+});
+
+test("커밋 대조 연결·오류 예시는 외부 인증 없이 구분된다", async ({ page }) => {
+  let githubCalls = 0;
+  page.on("request", (r) => {
+    if (r.url().includes("github.com")) githubCalls++;
+  });
+  await page.goto("http://127.0.0.1:5174/#/commits");
+  await page.getByLabel("미리보기 상태").selectOption("error");
+  await expect(page.getByRole("alert")).toContainText("이전 대조 결과를 유지");
+  await expect(page.locator(".commit-row").first()).toBeVisible();
+  await page.getByLabel("미리보기 상태").selectOption("expired");
+  await expect(
+    page.getByRole("heading", { name: "GitHub 재연결이 필요합니다" }),
+  ).toBeVisible();
+  await expect(page.locator(".commit-row")).toHaveCount(0);
+  await page.getByLabel("미리보기 상태").selectOption("denied");
+  await expect(
+    page.getByRole("heading", { name: "저장소 접근 권한을 확인해주세요" }),
+  ).toBeVisible();
+  await expect(page.locator(".commit-row")).toHaveCount(0);
+  await page.getByLabel("미리보기 상태").selectOption("empty");
+  await expect(
+    page.getByRole("heading", { name: "조회 범위에 커밋이 없습니다" }),
+  ).toBeVisible();
+  await page.getByLabel("미리보기 상태").selectOption("loading");
+  await expect(
+    page.getByRole("button", { name: "대조하기", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("region", { name: "커밋 대조 결과" }),
+  ).toHaveAttribute("aria-busy", "true");
+  await page.getByLabel("미리보기 상태").selectOption("disconnected");
+  await expect(
+    page.getByRole("button", { name: "GitHub 연결 · 준비 중" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "가상 데이터로 미리보기" }).click();
+  await expect(page.locator(".commit-row").first()).toBeVisible();
+  expect(githubCalls).toBe(0);
+});
+
+test("실무 커밋 대조는 연결 전 안내에서 가상 미리보기로 진입한다", async ({
+  page,
+}) => {
+  await mockLive(page);
+  await page.goto("http://127.0.0.1:5175/#/commits");
+  await expect(
+    page.getByRole("heading", { name: "GitHub 연결부터 시작하세요" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "가상 데이터로 미리보기" }).click();
+  await expect(page.locator(".commit-row")).toHaveCount(7);
+  await page
+    .getByLabel("비교 대상 브랜치", { exact: true })
+    .selectOption("develop");
+  await page.getByRole("button", { name: "대조하기", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("서로 다른 브랜치");
+});
+
+test("모바일 커밋 대조는 상세에서 목록으로 돌아가며 가로 넘침이 없다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:5174/#/commits");
+  await page
+    .getByRole("button", { name: "로그인 실패 안내 개선", exact: true })
+    .click();
+  await expect(page.getByRole("region", { name: "커밋 상세" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "목록으로 돌아가기", exact: true })
+    .click();
+  await expect(page.locator(".commit-results")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("활동 추가가 저장하지 않은 요청 본문을 지우지 않는다", async ({
   page,
 }) => {

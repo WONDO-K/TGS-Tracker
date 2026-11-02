@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useSession } from "../app/Session";
 type Options = {
   title: string;
   message: string;
@@ -9,6 +10,7 @@ type Options = {
 };
 const Context = createContext<(options: Options) => Promise<boolean>>(null!);
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const { profile } = useSession();
   const [options, setOptions] = useState<Options | null>(null),
     [agreed, setAgreed] = useState(false),
     dialog = useRef<HTMLDialogElement>(null),
@@ -20,6 +22,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setOptions(null);
     setAgreed(false);
   }
+  useEffect(() => {
+    dialog.current?.close();
+    resolver.current?.(false);
+    resolver.current = null;
+    setOptions(null);
+    setAgreed(false);
+  }, [profile?.id, profile?.is_active]);
   useEffect(() => {
     if (options && !dialog.current?.open) dialog.current?.showModal();
   }, [options]);

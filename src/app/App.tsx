@@ -9,6 +9,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useLocation,
 } from "react-router-dom";
 import { SessionProvider, useSession } from "./Session";
 import { AuthPage } from "../features/auth/AuthPage";
@@ -23,6 +24,7 @@ import { rpc } from "../lib/api";
 import { Brand } from "../components/Brand";
 import { ConfirmProvider } from "../components/Confirm";
 import { About } from "../features/about/About";
+import { CommitCompare } from "../features/commits/CommitCompare";
 let appRouter: ReturnType<typeof createHashRouter> | undefined;
 export function App({ authError = "" }: { authError?: string }) {
   // 인증 콜백 처리 후 초기화하고 StrictMode에서도 브라우저 이력 리스너는 하나만 만든다.
@@ -76,6 +78,7 @@ function AppContent({ authError = "" }: { authError?: string }) {
             <Route element={<Layout />}>
               <Route path="/board" element={<Board />} />
               <Route path="/requests" element={<Board list />} />
+              <Route path="/commits" element={<CommitCompare />} />
               <Route path="/requests/:id" element={<RequestDetail />} />
               <Route
                 path="/account"
@@ -157,12 +160,14 @@ function AdminGuard({ children }: { children: ReactNode }) {
 }
 function Layout() {
   const { profile, customers } = useSession();
+  const commitPreview = useLocation().pathname === "/commits";
   const mainLinks = (
     <>
       <NavLink to="/board">진행 현황</NavLink>
       <NavLink to="/requests" end>
         요청 목록
       </NavLink>
+      <NavLink to="/commits">커밋 대조</NavLink>
     </>
   );
   const adminLinks =
@@ -219,7 +224,13 @@ function Layout() {
       </aside>
       <header className="mobile-shell">
         <Brand />
-        <span>{demo ? "읽기 전용 데모" : "TGS 업무"}</span>
+        <span>
+          {demo
+            ? commitPreview
+              ? "UI 미리보기"
+              : "읽기 전용 데모"
+            : "TGS 업무"}
+        </span>
       </header>
       <div className="main-area">
         <main className="page-content">
@@ -230,7 +241,12 @@ function Layout() {
           )}
           {demo && (
             <div className="demo-banner">
-              포트폴리오 데모 <span>가상 데이터 · 읽기 전용</span>
+              포트폴리오 데모{" "}
+              <span>
+                {commitPreview
+                  ? "가상 데이터 · UI 미리보기"
+                  : "가상 데이터 · 읽기 전용"}
+              </span>
             </div>
           )}
           <Outlet />
