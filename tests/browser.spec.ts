@@ -492,7 +492,7 @@ test("커밋 대조 미리보기에서 저장소 조건과 결과 필터를 확�
   await expect(
     page.getByText("UI 미리보기 · 가상 데이터", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^대응 미확인/ }).click();
+  await page.getByRole("button", { name: /^미반영/ }).click();
   await expect(page.locator(".commit-row")).toHaveCount(2);
   await page.getByRole("button", { name: /^전체 \d/ }).click();
   await page.getByLabel("커밋 검색").fill("로그인");
@@ -512,7 +512,7 @@ test("커밋 근거 패널에서 가상 대응 연결과 해제 후 목록으로
   page,
 }) => {
   await page.goto("http://127.0.0.1:5174/#/commits");
-  await page.getByRole("button", { name: /^대응 미확인/ }).click();
+  await page.getByRole("button", { name: /^미반영/ }).click();
   await page
     .getByRole("button", { name: "검색 조건 초기화 동작 수정", exact: true })
     .click();
@@ -522,7 +522,7 @@ test("커밋 근거 패널에서 가상 대응 연결과 해제 후 목록으로
   await expect(
     panel.getByText("src/features/search/SearchForm.tsx", { exact: true }),
   ).toBeVisible();
-  await panel.getByRole("button", { name: "대응 근거", exact: true }).click();
+  await panel.getByRole("button", { name: "반영 근거", exact: true }).click();
   await panel.getByLabel("대응 커밋 선택").selectOption("e51a02b");
   await panel
     .getByRole("button", { name: "가상 대응 연결", exact: true })
@@ -535,17 +535,17 @@ test("커밋 근거 패널에서 가상 대응 연결과 해제 후 목록으로
   await panel.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(page.getByLabel("커밋 검색")).toBeFocused();
   await page
-    .getByLabel("비교 대상 브랜치", { exact: true })
+    .getByLabel("운영 브랜치", { exact: true })
     .selectOption("release");
   await page.getByRole("button", { name: "대조하기", exact: true }).click();
   await page
     .getByRole("button", { name: "검색 조건 초기화 동작 수정", exact: true })
     .click();
   await expect(panel.getByText("수동 연결", { exact: true })).toHaveCount(0);
-  await expect(panel.getByText("대응 미확인", { exact: true })).toBeVisible();
+  await expect(panel.getByText("미반영", { exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "닫기", exact: true }).click();
   await page
-    .getByLabel("비교 대상 브랜치", { exact: true })
+    .getByLabel("운영 브랜치", { exact: true })
     .selectOption("main");
   await page.getByRole("button", { name: "대조하기", exact: true }).click();
   await page
@@ -559,7 +559,7 @@ test("커밋 근거 패널에서 가상 대응 연결과 해제 후 목록으로
     .getByRole("dialog")
     .getByRole("button", { name: "해제", exact: true })
     .click();
-  await expect(panel.getByText("대응 미확인", { exact: true })).toBeVisible();
+  await expect(panel.getByText("미반영", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
   await expect(
@@ -620,7 +620,7 @@ test("실무 커밋 대조는 연결 전 안내에서 가상 미리보기로 진
   await page.getByRole("button", { name: "가상 데이터로 미리보기" }).click();
   await expect(page.locator(".commit-row")).toHaveCount(7);
   await page
-    .getByLabel("비교 대상 브랜치", { exact: true })
+    .getByLabel("운영 브랜치", { exact: true })
     .selectOption("develop");
   await page.getByRole("button", { name: "대조하기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("서로 다른 브랜치");

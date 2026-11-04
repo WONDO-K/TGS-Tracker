@@ -1,3 +1,4 @@
+import { CompareGuide } from "./CompareGuide";
 import { useEffect, useRef, useState } from "react";
 import { Alert, PageTitle } from "../../components/UI";
 import { useConfirm } from "../../components/Confirm";
@@ -289,9 +290,9 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
               </select>
             </label>
             <label>
-              기준 브랜치
+              테스트 브랜치
               <select
-                aria-label="기준 브랜치"
+                aria-label="테스트 브랜치"
                 value={draft.base}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, base: e.target.value }))
@@ -301,11 +302,12 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                   <option key={b}>{b}</option>
                 ))}
               </select>
+              <small>확인할 변경이 있는 브랜치</small>
             </label>
             <label>
-              비교 대상 브랜치
+              운영 브랜치
               <select
-                aria-label="비교 대상 브랜치"
+                aria-label="운영 브랜치"
                 value={draft.target}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, target: e.target.value }))
@@ -315,6 +317,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                   <option key={b}>{b}</option>
                 ))}
               </select>
+              <small>반영 여부를 확인할 브랜치</small>
             </label>
             <label>
               기준 커밋 기간
@@ -334,6 +337,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
               대조하기
             </button>
           </form>
+          <CompareGuide source={draft.base} target={draft.target} />
           {conditionError && <Alert>{conditionError}</Alert>}
           {changed && (
             <p className="commit-pending">
@@ -417,7 +421,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                       <tr>
                         <th>{applied.base} 커밋</th>
                         <th>변경 내용</th>
-                        <th>{applied.target} 대응</th>
+                        <th>{applied.target} 반영</th>
                         <th>대조 결과</th>
                       </tr>
                     </thead>
@@ -461,7 +465,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                               <span className="commit-no-target">
                                 {c.result === "review"
                                   ? "후보 검토 필요"
-                                  : "대응 미확인"}
+                                  : "미반영"}
                               </span>
                             )}
                           </td>
@@ -485,7 +489,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                   <p>
                     {rows.length
                       ? "검색어나 결과 필터를 바꿔보세요."
-                      : "기준 브랜치와 조회 기간을 확인해주세요. 오류와 커밋 없음은 별도로 표시합니다."}
+                      : "테스트 브랜치와 조회 기간을 확인해주세요. 오류와 커밋 없음은 별도로 표시합니다."}
                   </p>
                   {rows.length > 0 && (
                     <button
@@ -501,7 +505,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                 </div>
               )}
               <p className="commit-result-foot">
-                메시지가 유사한 커밋은 자동 확정하지 않습니다. 대응 미확인은
+                메시지가 유사한 커밋은 자동 확정하지 않습니다. 미반영은
                 조회 범위에서 근거를 찾지 못했다는 뜻입니다.
               </p>
             </section>
@@ -544,7 +548,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                     aria-pressed={tab === "evidence"}
                     onClick={() => setTab("evidence")}
                   >
-                    대응 근거
+                    반영 근거
                   </button>
                   <button
                     aria-pressed={tab === "files"}
@@ -557,7 +561,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                   <>
                     <dl className="commit-evidence">
                       <div>
-                        <dt>기준 브랜치</dt>
+                        <dt>테스트 브랜치</dt>
                         <dd>
                           {applied.base} · <code>{current.sha}</code>
                         </dd>
@@ -576,7 +580,7 @@ export function CommitPreview({ ready = demo }: { ready?: boolean }) {
                         <dt>확인 근거</dt>
                         <dd>
                           {current.evidence ||
-                            "조회 범위에서 대응 근거를 찾지 못했습니다."}
+                            "조회 범위에서 반영 근거를 찾지 못했습니다."}
                         </dd>
                       </div>
                     </dl>

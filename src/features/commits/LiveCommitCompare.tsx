@@ -1,3 +1,4 @@
+import { CompareGuide } from "./CompareGuide";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "../../app/Session";
 import { Alert, PageTitle } from "../../components/UI";
@@ -755,9 +756,9 @@ export function LiveCommitCompare() {
               </select>
             </label>
             <label>
-              기준 브랜치
+              테스트 브랜치
               <select
-                aria-label="기준 브랜치"
+                aria-label="테스트 브랜치"
                 value={draft.baseBranch}
                 disabled={loadingBranches}
                 onChange={(e) =>
@@ -768,11 +769,12 @@ export function LiveCommitCompare() {
                   <option key={b.name}>{b.name}</option>
                 ))}
               </select>
+              <small>확인할 변경이 있는 브랜치</small>
             </label>
             <label>
-              비교 대상 브랜치
+              운영 브랜치
               <select
-                aria-label="비교 대상 브랜치"
+                aria-label="운영 브랜치"
                 value={draft.targetBranch}
                 disabled={loadingBranches}
                 onChange={(e) =>
@@ -783,6 +785,7 @@ export function LiveCommitCompare() {
                   <option key={b.name}>{b.name}</option>
                 ))}
               </select>
+              <small>반영 여부를 확인할 브랜치</small>
             </label>
             <label>
               기준 커밋 기간
@@ -813,6 +816,7 @@ export function LiveCommitCompare() {
               {busy ? "조회 중…" : "대조하기"}
             </button>
           </form>
+          <CompareGuide source={draft.baseBranch} target={draft.targetBranch} />
           {profile?.role === "admin" ? (
             <details className="commit-mapping">
               <summary>고객사 저장소 관리</summary>
@@ -959,7 +963,7 @@ export function LiveCommitCompare() {
                           <tr>
                             <th>{comparison.baseBranch} 커밋</th>
                             <th>변경 내용</th>
-                            <th>{comparison.targetBranch} 대응</th>
+                            <th>{comparison.targetBranch} 반영</th>
                             <th>대조 결과</th>
                           </tr>
                         </thead>
@@ -1000,7 +1004,7 @@ export function LiveCommitCompare() {
                                   <span className="commit-no-target">
                                     {c.result === "review"
                                       ? "후보 검토 필요"
-                                      : "대응 미확인"}
+                                      : "미반영"}
                                   </span>
                                 )}
                               </td>
@@ -1021,12 +1025,11 @@ export function LiveCommitCompare() {
                           ? "검색 조건에 맞는 커밋이 없습니다"
                           : "조회 범위에 커밋이 없습니다"}
                       </h2>
-                      <p>기준 브랜치·기간 또는 검색 조건을 확인해주세요.</p>
+                      <p>테스트 브랜치·기간 또는 검색 조건을 확인해주세요.</p>
                     </div>
                   )}
                   <p className="commit-result-foot">
-                    메시지가 유사한 커밋은 자동 확정하지 않습니다. 대응 미확인은
-                    조회 범위에서 근거를 찾지 못했다는 뜻입니다.
+                    메시지가 유사한 커밋은 자동 확정하지 않습니다. 미반영은 조회 범위에서 근거를 찾지 못했다는 뜻입니다.
                   </p>
                 </section>
                 {current && (
@@ -1068,7 +1071,7 @@ export function LiveCommitCompare() {
                         aria-pressed={tab === "evidence"}
                         onClick={() => setTab("evidence")}
                       >
-                        대응 근거
+                        반영 근거
                       </button>
                       <button
                         aria-pressed={tab === "files"}
@@ -1081,7 +1084,7 @@ export function LiveCommitCompare() {
                       <>
                         <dl className="commit-evidence">
                           <div>
-                            <dt>기준 브랜치</dt>
+                            <dt>테스트 브랜치</dt>
                             <dd>
                               {comparison.baseBranch} ·{" "}
                               <code>{current.sha}</code>
@@ -1099,7 +1102,7 @@ export function LiveCommitCompare() {
                             <dt>확인 근거</dt>
                             <dd>
                               {current.evidence ||
-                                "조회 범위에서 대응 근거를 찾지 못했습니다."}
+                                "조회 범위에서 반영 근거를 찾지 못했습니다."}
                             </dd>
                           </div>
                           {confirmation && (
@@ -1114,7 +1117,7 @@ export function LiveCommitCompare() {
                         </dl>
                         <p className="commit-explanation">
                           체리픽으로 SHA가 달라질 수 있습니다. 변경 파일과
-                          후보를 검토하세요. 대응 확인은 배포 완료를 보장하지
+                          후보를 검토하세요. 브랜치 반영은 배포 완료를 보장하지
                           않습니다.
                         </p>
                         {!current.target && (

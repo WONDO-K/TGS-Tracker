@@ -309,7 +309,7 @@ test("GitHub confirmation closes when the authenticated actor changes", async ({
 });
 async function compare(page: Page) {
   await expect(
-    page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
   ).toHaveValue("develop");
   await page.getByRole("button", { name: "대조하기", exact: true }).click();
   await expect(
@@ -395,7 +395,7 @@ test("live compare fetches files, verifies target and persists server confirmati
   await page.getByRole("button", { name: "변경 파일", exact: true }).click();
   await expect(page.getByText("src/fixture.ts", { exact: true })).toBeVisible();
   await expect(page.locator(".commit-patch")).toContainText("+new");
-  await page.getByRole("button", { name: "대응 근거", exact: true }).click();
+  await page.getByRole("button", { name: "반영 근거", exact: true }).click();
   await page
     .getByRole("textbox", { name: "대응 커밋 SHA", exact: true })
     .fill(target.slice(0, 7));
@@ -524,7 +524,7 @@ test("late comparison cannot restore private data after customer change", async 
   });
   await open(page);
   await expect(
-    page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
   ).toHaveValue("develop");
   await page.getByRole("button", { name: "대조하기", exact: true }).click();
   await started;
@@ -546,7 +546,7 @@ test("admin maps accessible repositories to the selected customer", async ({
   const calls = await mockLive(page, { admin: true });
   await open(page);
   await expect(
-    page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
   ).toHaveValue("develop");
   await page.getByText("고객사 저장소 관리", { exact: true }).click();
   await page
@@ -562,10 +562,10 @@ test("admin maps accessible repositories to the selected customer", async ({
     page.getByText("고객사 저장소를 등록했습니다.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
   ).toHaveValue("develop");
   await expect(
-    page.getByRole("combobox", { name: "비교 대상 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "운영 브랜치", exact: true }),
   ).toHaveValue("main");
   await expect(
     page.getByRole("button", { name: "대조하기", exact: true }),
@@ -736,7 +736,7 @@ for (const action of ["disconnect", "saveLink", "detachRepository"] as const) {
     const calls = await mockLive(page, { admin: true });
     await open(page);
     await expect(
-      page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+      page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
     ).toHaveValue("develop");
     if (action === "saveLink") {
       await compare(page);
@@ -799,7 +799,7 @@ test("transport refuses a changed session actor after a pending confirmation", a
   const calls = await mockLive(page);
   await open(page);
   await expect(
-    page.getByRole("combobox", { name: "기준 브랜치", exact: true }),
+    page.getByRole("combobox", { name: "테스트 브랜치", exact: true }),
   ).toHaveValue("develop");
   await page.locator(".commit-connection summary").click();
   await page

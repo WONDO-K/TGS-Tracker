@@ -11,9 +11,9 @@ export type Commit = {
   files: { name: string; added: number; removed: number }[];
 };
 export const resultLabels: Record<Result, string> = {
-  matched: "대응 확인",
-  unmatched: "대응 미확인",
-  review: "검토 필요",
+  matched: "반영",
+  unmatched: "미반영",
+  review: "확인 필요",
 };
 export const repositories: {
   id: Repo;
